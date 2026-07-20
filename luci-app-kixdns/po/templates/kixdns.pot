@@ -1,0 +1,242 @@
+msgid ""
+msgstr "Content-Type: text/plain; charset=UTF-8"
+
+msgid "KixDNS"
+msgstr ""
+
+msgid ""
+"KixDNS is a high-performance, non-recursive DNS forwarding server. Edit the "
+"pipeline rules in the \"Config Editor\" tab."
+msgstr ""
+
+msgid "Overview"
+msgstr ""
+
+msgid "Config Editor"
+msgstr ""
+
+msgid "Log"
+msgstr ""
+
+msgid "Service Status"
+msgstr ""
+
+msgid "Status"
+msgstr ""
+
+msgid "RUNNING"
+msgstr ""
+
+msgid "NOT RUNNING"
+msgstr ""
+
+msgid "General Settings"
+msgstr ""
+
+msgid "Enable"
+msgstr ""
+
+msgid "Enable and start the KixDNS service."
+msgstr ""
+
+msgid "DNS Hijack"
+msgstr ""
+
+msgid ""
+"Redirect all DNS requests (port 53, UDP/TCP) from LAN clients to KixDNS via "
+"nftables. The redirect target port is taken from \"bind_udp\" in the "
+"pipeline config."
+msgstr ""
+
+msgid "Listener label"
+msgstr ""
+
+msgid "Value passed to --listener-label for pipeline selection."
+msgstr ""
+
+msgid "UDP workers"
+msgstr ""
+
+msgid "Number of UDP worker threads. Leave empty to use the number of CPU cores."
+msgstr ""
+
+msgid "auto"
+msgstr ""
+
+msgid "GeoIP download URL"
+msgstr ""
+
+msgid ""
+"Download a V2Ray GeoIP database to /etc/kixdns/geoip.dat before each service "
+"start. Leave empty to disable downloading."
+msgstr ""
+
+msgid "Configuration download URL"
+msgstr ""
+
+msgid ""
+"KixDNS always uses the local /etc/kixdns/pipeline.json. The remote file is "
+"downloaded only when you click \"Update configuration\"."
+msgstr ""
+
+msgid "Remote configuration"
+msgstr ""
+
+msgid ""
+"Download from the URL above, validate the JSON, and replace the local "
+"configuration now. The previous local file is kept as "
+"/etc/kixdns/pipeline.json.bak."
+msgstr ""
+
+msgid "Update configuration"
+msgstr ""
+
+msgid "Enter a configuration download URL first."
+msgstr ""
+
+msgid "Configuration updated and KixDNS restarted."
+msgstr ""
+
+msgid "Configuration update failed"
+msgstr ""
+
+msgid "Command failed"
+msgstr ""
+
+msgid "KixDNS configuration editor"
+msgstr ""
+
+msgid "Configuration file is missing or unreadable."
+msgstr ""
+
+msgid "The local configuration changed after this editor loaded. Reload it before saving."
+msgstr ""
+
+msgid "Configuration saved."
+msgstr ""
+
+msgid "Log filter (RUST_LOG)"
+msgstr ""
+
+msgid "Tracing filter passed via the RUST_LOG environment variable."
+msgstr ""
+
+msgid "Errors + matcher logs (recommended)"
+msgstr ""
+
+msgid "Errors only"
+msgstr ""
+
+msgid "Info"
+msgstr ""
+
+msgid "Debug"
+msgstr ""
+
+msgid "Debug logging"
+msgstr ""
+
+msgid "Pass --debug to the daemon."
+msgstr ""
+
+msgid "KixDNS - Config Editor"
+msgstr ""
+
+msgid ""
+"Edit the pipeline configuration (%s). The content must be valid JSON; it is "
+"validated before saving. KixDNS also supports hot-reloading the config file."
+msgstr ""
+
+msgid "line"
+msgstr ""
+
+msgid "column"
+msgstr ""
+
+msgid "JSON is valid."
+msgstr ""
+
+msgid "JSON is valid, formatted."
+msgstr ""
+
+msgid "Invalid JSON"
+msgstr ""
+
+msgid "Not saved — invalid JSON"
+msgstr ""
+
+msgid "Saved."
+msgstr ""
+
+msgid "Saved and service restarted."
+msgstr ""
+
+msgid "Configuration saved and KixDNS restarted."
+msgstr ""
+
+msgid "Save failed"
+msgstr ""
+
+msgid "Validate"
+msgstr ""
+
+msgid "Format"
+msgstr ""
+
+msgid "Save"
+msgstr ""
+
+msgid "Save & Apply"
+msgstr ""
+
+msgid "KixDNS - Log"
+msgstr ""
+
+msgid "Filter (domain, IP, rule ...)"
+msgstr ""
+
+msgid "Rule"
+msgstr ""
+
+msgid "All rules"
+msgstr ""
+
+msgid "Lines"
+msgstr ""
+
+msgid "All"
+msgstr ""
+
+msgid "Auto refresh"
+msgstr ""
+
+msgid "Refresh"
+msgstr ""
+
+msgid "%d shown / %d matched"
+msgstr ""
+
+msgid "No log entries match the current filters."
+msgstr ""
+
+msgid "No log entries in %s."
+msgstr ""
+
+msgid "Listening (from pipeline config)"
+msgstr ""
+
+msgid "Log size limit (KB)"
+msgstr ""
+
+msgid ""
+"When the log file exceeds this size on service start, it is cleared before "
+"new entries are written."
+msgstr ""
+
+msgid "Clear log"
+msgstr ""
+
+msgid ""
+"Log file: %s (cleared on service start if oversized, kept out of the system "
+"log)."
+msgstr ""

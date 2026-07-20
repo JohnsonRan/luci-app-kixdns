@@ -1,0 +1,2 @@
+luci-app-kixdns/htdocs/luci-static/resources/kixdns/vendor/*.min.css -diff
+luci-app-kixdns/htdocs/luci-static/resources/kixdns/vendor/*.min.js -diff

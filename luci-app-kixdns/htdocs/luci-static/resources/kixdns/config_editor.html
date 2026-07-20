@@ -1,0 +1,1915 @@
+<!DOCTYPE html>
+<!-- Adapted from KixDNS tools/config_editor.html (GPL-3.0-only). -->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KixDNS 配置编辑器</title>
+    <link href="vendor/bootstrap-5.3.0.min.css" rel="stylesheet">
+    <script src="vendor/vue-3.5.40.global.prod.js"></script>
+    <script src="vendor/mermaid-11.16.0.min.js"></script>
+    <style>
+        :root {
+            color-scheme: light;
+            --editor-canvas: #f8f9fa;
+            --editor-surface: #ffffff;
+            --editor-surface-raised: #f1f3f5;
+            --editor-border: #dee2e6;
+            --editor-text: #212529;
+            --editor-muted: #66707a;
+            --editor-json: #212529;
+            --editor-json-field: #1b1f23;
+            --editor-close-filter: none;
+            --editor-accent-soft: #e7f1ff;
+            --editor-sticky-shadow: rgba(24, 33, 43, .12);
+        }
+        body.theme-dark {
+            color-scheme: dark;
+            --editor-canvas: #111417;
+            --editor-surface: #1b1f23;
+            --editor-surface-raised: #252a30;
+            --editor-border: #3b424a;
+            --editor-text: #e7eaee;
+            --editor-muted: #aeb6bf;
+            --editor-json: #0d1013;
+            --editor-json-field: #15191d;
+            --editor-close-filter: invert(1) grayscale(100%) brightness(180%);
+            --editor-accent-soft: #182a46;
+            --editor-sticky-shadow: rgba(0, 0, 0, .42);
+        }
+        @media (prefers-color-scheme: dark) {
+            body:not(.theme-light) {
+                color-scheme: dark;
+                --editor-canvas: #111417;
+                --editor-surface: #1b1f23;
+                --editor-surface-raised: #252a30;
+                --editor-border: #3b424a;
+                --editor-text: #e7eaee;
+                --editor-muted: #aeb6bf;
+                --editor-json: #0d1013;
+                --editor-json-field: #15191d;
+                --editor-close-filter: invert(1) grayscale(100%) brightness(180%);
+                --editor-accent-soft: #182a46;
+                --editor-sticky-shadow: rgba(0, 0, 0, .42);
+            }
+        }
+        html, body, #app { height: 100%; margin: 0; }
+        body { overflow: hidden; background-color: var(--editor-canvas); color: var(--editor-text); -webkit-font-smoothing: antialiased; }
+        button, input, select, textarea { touch-action: manipulation; }
+        .editor-pane { --editor-pane-gutter: 1.5rem; container: editor-pane / inline-size; height: 100vh; overflow-y: auto; background: var(--editor-canvas); border-right: 1px solid var(--editor-border); scrollbar-color: var(--editor-border) transparent; }
+        .preview-pane { display: flex; height: 100vh; min-height: 0; flex-direction: column; background-color: var(--editor-json); color: #f0f0f0; }
+        .preview-pane textarea { min-height: 20rem; flex: 1; resize: none; background: var(--editor-json-field) !important; color: #f0f0f0 !important; }
+        .mobile-pane-tabs { height: 52px; padding: 6px; background: var(--editor-surface); border-bottom: 1px solid var(--editor-border); }
+        .mobile-pane-tabs .btn { min-height: 40px; }
+        .editor-sticky-controls {
+            position: sticky;
+            top: calc(-1 * var(--editor-pane-gutter));
+            z-index: 20;
+            margin: 0 calc(-1 * var(--editor-pane-gutter)) 1rem;
+            padding: .75rem var(--editor-pane-gutter) .6rem;
+            background: var(--editor-canvas);
+            border-bottom: 1px solid var(--editor-border);
+            box-shadow: 0 .45rem 1rem var(--editor-sticky-shadow);
+        }
+        .editor-toolbar { margin-bottom: .65rem; }
+        .editor-sticky-controls .nav-tabs { margin-bottom: .6rem; }
+        .editor-outline-shell { min-width: 0; }
+        .editor-outline {
+            display: flex;
+            min-width: 0;
+            gap: .15rem;
+            overflow-x: auto;
+            padding: .08rem 0 .18rem;
+            scrollbar-width: none;
+            overscroll-behavior-x: contain;
+        }
+        .editor-outline::-webkit-scrollbar { display: none; }
+        .editor-outline-item {
+            display: inline-flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: .42rem;
+            max-width: 16rem;
+            padding: .34rem .52rem;
+            overflow: hidden;
+            color: var(--editor-muted);
+            background: transparent;
+            border: 0;
+            border-radius: .2rem;
+            font-size: .82rem;
+            line-height: 1.2;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .editor-outline-item + .editor-outline-item { border-left: 1px solid var(--editor-border); }
+        .editor-outline-item:hover { color: var(--editor-text); background: var(--editor-accent-soft); }
+        .editor-outline-item.is-active { color: #4c8dff; box-shadow: inset 0 -2px 0 #4c8dff; }
+        .editor-outline-item.kind-pipeline::before,
+        .editor-outline-item.kind-rule::before { content: ''; flex: 0 0 auto; width: .42rem; height: .42rem; border: 1.5px solid currentColor; }
+        .editor-outline-item.kind-pipeline::before { transform: rotate(45deg); }
+        .editor-outline-item.kind-rule::before { border-radius: 50%; background: currentColor; }
+        .editor-scroll-spacer { height: max(12rem, calc(100vh - 12rem)); pointer-events: none; }
+        .outline-target-flash { outline: 4px solid transparent; outline-offset: 2px; animation: outline-target-flash 1.05s ease-out; }
+        @keyframes outline-target-flash {
+            0%, 55% { outline-color: rgba(76, 141, 255, .9); }
+            100% { outline-color: rgba(76, 141, 255, 0); }
+        }
+        .card { margin-bottom: 1rem; background: var(--editor-surface); color: var(--editor-text); border-color: var(--editor-border); }
+        .matcher-item, .action-item { background-color: var(--editor-surface); border: 1px solid var(--editor-border); padding: 0.5rem; margin-bottom: 0.5rem; border-radius: 0.25rem; }
+        .bg-light, .bg-white, .input-group-text, .accordion-button, .accordion-item, .list-group-item {
+            background-color: var(--editor-surface-raised) !important;
+            color: var(--editor-text) !important;
+            border-color: var(--editor-border) !important;
+        }
+        .accordion-body { background: var(--editor-surface); color: var(--editor-text); }
+        .accordion-button:not(.collapsed) { box-shadow: inset 0 calc(-1 * var(--bs-accordion-border-width)) 0 var(--editor-border); }
+        .form-control, .form-select {
+            background-color: var(--editor-surface) !important;
+            color: var(--editor-text) !important;
+            border-color: var(--editor-border) !important;
+        }
+        .form-control::placeholder { color: var(--editor-muted); opacity: 1; }
+        .form-control:focus, .form-select:focus { border-color: #4c8dff !important; box-shadow: 0 0 0 .2rem rgba(13,110,253,.2); }
+        .form-text, .text-muted, .text-secondary { color: var(--editor-muted) !important; }
+        .nav-tabs { border-color: var(--editor-border); }
+        .nav-tabs .nav-link { color: #4c8dff; }
+        .nav-tabs .nav-link.active { background: var(--editor-surface); color: var(--editor-text); border-color: var(--editor-border) var(--editor-border) var(--editor-surface); }
+        .btn-close { filter: var(--editor-close-filter); }
+        hr { border-color: var(--editor-border); opacity: 1; }
+        .list-group-item { border-left: 4px solid transparent; }
+        .list-group-item.active-pipeline { border-left-color: #0d6efd; }
+        pre { margin: 0; }
+        @container editor-pane (max-width: 1200px) {
+            .row > .col-md-3,
+            .row > .col-md-4,
+            .row > .col-md-6,
+            .row > .col-md-8 { width: 50%; }
+        }
+        @container editor-pane (max-width: 620px) {
+            .row > .col-md-3,
+            .row > .col-md-4,
+            .row > .col-md-6,
+            .row > .col-md-8 { width: 100%; }
+        }
+        @media (max-width: 1199.98px) {
+            .mobile-pane-tabs { display: block !important; }
+            .mobile-hidden { display: none !important; }
+            .editor-pane, .preview-pane {
+                width: 100% !important;
+                height: calc(100vh - 52px);
+                border-right: 0;
+            }
+        }
+        @media (max-width: 767.98px) {
+            .editor-pane { --editor-pane-gutter: 1rem; padding: 1rem !important; }
+            .preview-pane { padding: 1rem !important; }
+            .editor-pane h2 { margin-bottom: 1rem !important; font-size: 1.35rem; }
+            .editor-sticky-controls { padding-top: .6rem; }
+            .preview-pane textarea { min-height: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .outline-target-flash { animation-duration: .8s; animation-timing-function: steps(1, end); }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container-fluid">
+        <div class="mobile-pane-tabs d-md-none">
+            <div class="btn-group w-100" role="group" aria-label="编辑器视图">
+                <button type="button" class="btn" :class="mobilePane === 'editor' ? 'btn-primary' : 'btn-outline-secondary'" @click="mobilePane = 'editor'">结构化编辑</button>
+                <button type="button" class="btn" :class="mobilePane === 'json' ? 'btn-primary' : 'btn-outline-secondary'" @click="mobilePane = 'json'">JSON 配置</button>
+            </div>
+        </div>
+        <div class="row g-0">
+            <!-- Editor Pane -->
+            <div ref="editorPaneRef" class="col-md-7 editor-pane p-4" :class="{ 'mobile-hidden': mobilePane !== 'editor' }" @scroll="onEditorScroll">
+                <h2 class="mb-4">KixDNS 配置编辑器</h2>
+
+                <div ref="stickyControlsRef" class="editor-sticky-controls">
+                    <!-- Toolbar -->
+                    <div class="editor-toolbar d-flex flex-wrap align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary" :disabled="busy" @click="requestLoad">重新读取</button>
+                        <button type="button" class="btn btn-primary" :disabled="busy" @click="requestSave(false)">保存</button>
+                        <button type="button" class="btn btn-success" :disabled="busy" @click="requestSave(true)">保存并应用</button>
+                        <span class="small ms-md-2" :class="bridgeStatusClass" role="status">{{ bridgeStatus }}</span>
+                    </div>
+
+                    <ul class="nav nav-tabs">
+                        <li class="nav-item">
+                            <a class="nav-link" :class="{ active: currentTab === 'editor' }" href="#" @click.prevent="showEditor">配置编辑</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" :class="{ active: currentTab === 'flowchart' }" href="#" @click.prevent="renderFlowchart">流程图</a>
+                        </li>
+                    </ul>
+
+                    <div v-show="currentTab === 'editor'" class="editor-outline-shell">
+                        <nav ref="outlineRef" class="editor-outline" aria-label="配置大纲" @wheel="onOutlineWheel">
+                            <button v-for="item in outlineItems" :key="item.key" type="button"
+                                class="editor-outline-item" :class="['kind-' + item.kind, { 'is-active': activeOutlineKey === item.key }]"
+                                :aria-current="activeOutlineKey === item.key ? 'location' : null"
+                                :data-outline-button="item.key" :title="item.label" @click="jumpToOutline(item)">
+                                <span class="text-truncate">{{ item.label }}</span>
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+
+                <div v-show="currentTab === 'flowchart'">
+                    <div class="card">
+                        <div class="card-body text-center overflow-auto">
+                            <div ref="mermaidRef"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-show="currentTab === 'editor'">
+                <!-- Global Settings -->
+                <div class="card" data-outline-key="settings">
+                    <div class="card-header bg-light fw-bold">全局设置 (Settings)</div>
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-2 text-primary">基础配置</h6>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">UDP 监听地址</label>
+                                <input type="text" class="form-control" v-model="config.settings.bind_udp">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">TCP 监听地址</label>
+                                <input type="text" class="form-control" v-model="config.settings.bind_tcp">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">默认上游</label>
+                                <input type="text" class="form-control" v-model="config.settings.default_upstream">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">最小 TTL</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.min_ttl">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">上游超时 (ms)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.upstream_timeout_ms">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">整体请求超时 (ms)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.request_timeout_ms" placeholder="留空自动计算">
+                                <div class="form-text small">包含 hedge + TCP fallback 的总超时，留空则自动计算为 upstream * 2.5</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">响应跳转上限</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.response_jump_limit">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">UDP 连接池大小</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.udp_pool_size" placeholder="64">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">TCP 连接池大小</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.tcp_pool_size" placeholder="64">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">DoH 连接池大小</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.doh_pool_size" placeholder="8">
+                                <div class="form-text small">每个上游最大空闲连接数（默认 8）</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">DoT 连接池大小</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.dot_pool_size" placeholder="64">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">DoQ 连接池大小</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.doq_pool_size" placeholder="16">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">TCP 健康检查错误阈值</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.tcp_health_check_error_threshold" placeholder="3">
+                                <div class="form-text small">连续失败多少次后重置连接（0=禁用，默认 3）</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">TCP 连接最大存活时间 (秒)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.tcp_connection_max_age_seconds" placeholder="300">
+                                <div class="form-text small">连接超过此时间强制重置（0=禁用，默认 300）</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">TCP 连接空闲超时 (秒)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.tcp_connection_idle_timeout_seconds" placeholder="60">
+                                <div class="form-text small">无请求超过此时间重置连接（0=禁用，默认 60）</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">DoQ 连接空闲超时 (秒)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.doq_connection_idle_timeout_seconds" placeholder="60">
+                                <div class="form-text small">QUIC 连接空闲超时（0=禁用，默认 60）</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">DoQ Keepalive (ms)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.doq_keepalive_interval_ms" placeholder="15000">
+                                <div class="form-text small">0=禁用，默认 15000</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">启用 DoQ 0-RTT</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" v-model="config.settings.doq_enable_0rtt">
+                                    <label class="form-check-label">允许 0-RTT</label>
+                                </div>
+                                <div class="form-text small">可能存在重放风险，默认启用</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">启用 TCP Fallback</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" v-model="config.settings.enable_tcp_fallback">
+                                    <label class="form-check-label">UDP 失败自动切换到 TCP</label>
+                                </div>
+                                <div class="form-text small">UDP 失败时自动 fallback 到 TCP（默认 true）</div>
+                            </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">缓存容量 (entries)</label>
+                                    <input type="number" class="form-control" v-model.number="config.settings.cache_capacity" placeholder="10000">
+                                    <div class="form-text small">moka 缓存最大条目数 (默认 10000)</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">缓存失效时间 (TTL)</label>
+                                    <input type="number" class="form-control" v-model.number="config.settings.cache_max_ttl" placeholder="86400">
+                                    <div class="form-text small">moka 缓存强制失效时间 (秒，默认 86400)</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">DashMap Shards</label>
+                                    <input type="number" class="form-control" v-model.number="config.settings.dashmap_shards" placeholder="0=自动">
+                                    <div class="form-text small">0=自动 (默认)，更多 shards=更少锁竞争但更多内存</div>
+                                </div>
+                        </div>
+
+                        <hr>
+                        <h6 class="fw-bold mb-2 text-warning">缓存后台刷新配置 (Cache Background Refresh)</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">启用后台刷新</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" v-model="config.settings.cache_background_refresh">
+                                    <label class="form-check-label">启用缓存后台刷新</label>
+                                </div>
+                                <div class="form-text small">当TTL即将过期时异步刷新缓存条目</div>
+                            </div>
+                            <div class="col-md-4" v-show="config.settings.cache_background_refresh">
+                                <label class="form-label">刷新阈值 (%)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.cache_refresh_threshold_percent" placeholder="10" min="1" max="90">
+                                <div class="form-text small">当剩余TTL低于此百分比时触发刷新（1-90，默认10）</div>
+                            </div>
+                            <div class="col-md-4" v-show="config.settings.cache_background_refresh">
+                                <label class="form-label">刷新最小 TTL (秒)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.cache_refresh_min_ttl" placeholder="5" min="0">
+                                <div class="form-text small">防止TTL过短导致无限循环刷新（默认 5）</div>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <h6 class="fw-bold mb-2 text-danger">RFC 8767 过期缓存 (Serve Stale)</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">服务过期响应</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" v-model="config.settings.serve_stale">
+                                    <label class="form-check-label">启用 RFC 8767 Serve Stale</label>
+                                </div>
+                                <div class="form-text small">上游不可用时返回过期缓存而非 SERVFAIL</div>
+                            </div>
+                            <div class="col-md-4" v-show="config.settings.serve_stale">
+                                <label class="form-label">过期记录回复TTL值 (秒)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.serve_stale_ttl" placeholder="30" min="1">
+                                <div class="form-text small">返回过期数据时使用的 TTL（对应 Unbound serve-expired-reply-ttl，默认 30秒）</div>
+                            </div>
+                            <div class="col-md-4" v-show="config.settings.serve_stale">
+                                <label class="form-label">过期响应的 TTL (秒)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.serve_stale_expire_ttl" placeholder="86400" min="0">
+                                <div class="form-text small">缓存过期后可服务的最大时间窗口，0=无限制（对应 Unbound serve-expired-ttl，默认 86400秒）</div>
+                            </div>
+                        </div>
+                        <div class="row g-3 mt-1" v-show="config.settings.serve_stale">
+                            <div class="col-md-4">
+                                <label class="form-label">重置过期记录 TTL</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" v-model="config.settings.serve_stale_ttl_reset">
+                                    <label class="form-check-label">启用 TTL 重置</label>
+                                </div>
+                                <div class="form-text small">每次返回过期数据时重置过期时间窗口（对应 Unbound serve-expired-ttl-reset）</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">客户端响应超时 (ms)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.serve_stale_client_timeout_ms" placeholder="0" min="0">
+                                <div class="form-text small">0=立即返回过期数据，>0=先尝试上游查询此时间后再返回过期数据（对应 Unbound serve-expired-client-timeout，默认 0）</div>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <h6 class="fw-bold mb-2 text-success">自适应流量控制配置 (Flow Control)</h6>
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label">启用流控</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" v-model="config.settings.flow_control_enabled">
+                                    <label class="form-check-label">启用自适应流控</label>
+                                </div>
+                                <div class="form-text small">推荐禁用以获得更好的性能和更简单的行为（rustdns风格）。禁用后不限制并发，依赖 tokio runtime 调度和超时保护。</div>
+                            </div>
+                            <div class="col-md-6" v-show="config.settings.flow_control_enabled">
+                                <label class="form-label">初始许可数 (Initial Permits)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.flow_control_initial_permits" placeholder="500">
+                                <div class="form-text small">初始并发任务数</div>
+                            </div>
+                            <div class="col-md-6" v-show="config.settings.flow_control_enabled">
+                                <label class="form-label">最小许可数 (Min Permits)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.flow_control_min_permits" placeholder="100">
+                                <div class="form-text small">并发下限</div>
+                            </div>
+                            <div class="col-md-6" v-show="config.settings.flow_control_enabled">
+                                <label class="form-label">最大许可数 (Max Permits)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.flow_control_max_permits" placeholder="800">
+                                <div class="form-text small">并发上限</div>
+                            </div>
+                            <div class="col-md-6" v-show="config.settings.flow_control_enabled">
+                                <label class="form-label">延迟阈值 (ms)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.flow_control_latency_threshold_ms" placeholder="100">
+                                <div class="form-text small">压力判断的延迟阈值</div>
+                            </div>
+                            <div class="col-md-6" v-show="config.settings.flow_control_enabled">
+                                <label class="form-label">调整间隔 (seconds)</label>
+                                <input type="number" class="form-control" v-model.number="config.settings.flow_control_adjustment_interval_secs" placeholder="5">
+                                <div class="form-text small">流控参数检查频率</div>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <h6 class="fw-bold mb-2 text-info">GeoIP 配置 (GeoIP Database)</h6>
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label">MMDB 文件路径</label>
+                                <input type="text" class="form-control" v-model="config.settings.geoip_db_path" placeholder="留空则不使用 GeoIP">
+                                <div class="form-text small">MaxMind MMDB 文件路径（如 GeoLite2-Country.mmdb），留空则不加载 GeoIP 功能</div>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">.dat 文件路径 (V2Ray 格式)</label>
+                                <input type="text" class="form-control" v-model="config.settings.geoip_dat_path" placeholder="留空则不使用 .dat 文件">
+                                <div class="form-text small">V2Ray .dat 或 JSON 格式的 GeoIP 数据文件路径，支持热重载。缓存大小会根据实际加载的条目自动设置。</div>
+                            </div>
+                            <div class="col-md-4" v-show="config.settings.geoip_dat_path || config.settings.geoip_db_path">
+                                <label class="form-label">自动转换 .dat 为 MMDB</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" v-model="config.settings.geoip_auto_convert">
+                                    <label class="form-check-label">启用自动转换</label>
+                                </div>
+                                <div class="form-text small">当 MMDB 不存在但 .dat 文件存在时，自动转换并缓存 MMDB</div>
+                            </div>
+                            <div class="col-md-8" v-show="config.settings.geoip_dat_path || config.settings.geoip_db_path">
+                                <label class="form-label">转换时过滤国家代码</label>
+                                <input type="text" class="form-control" v-model="geoipFilterCountriesString" placeholder="CN,US,JP 或留空表示全部">
+                                <div class="form-text small">只转换指定国家的数据，逗号分隔（如 CN,US,JP），留空则转换全部国家</div>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <h6 class="fw-bold mb-2 text-primary">GeoSite 配置 (GeoSite Data)</h6>
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label">启用 GeoSite</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" v-model="geositeEnabled">
+                                    <label class="form-check-label">启用 GeoSite 匹配</label>
+                                </div>
+                                <div class="form-text small">启用后可以加载 V2Ray GeoSite 数据文件进行域名分类匹配</div>
+                            </div>
+                            <div class="col-md-12" v-show="geositeEnabled">
+                                <label class="form-label">数据文件路径（支持多个）</label>
+                                <div class="input-group mb-2" v-for="(path, idx) in geositePaths" :key="idx">
+                                    <input type="text" class="form-control" v-model="geositePaths[idx]" placeholder="geosite.dat 或 v2ray.dat">
+                                    <button class="btn btn-outline-danger" @click="removeGeositePath(idx)">删除</button>
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary" @click="addGeositePath">+ 添加文件</button>
+                                <div class="form-text small">V2Ray GeoSite 数据文件路径（.dat 或 .json 格式），支持多个文件。缓存大小会根据实际加载的条目自动设置。</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipeline Selectors -->
+                <div class="card" data-outline-key="pipeline-select">
+                    <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+                        <span>分流规则 (Pipeline Select)</span>
+                        <button class="btn btn-sm btn-outline-primary" @click="addPipelineSelect">+ 添加规则</button>
+                    </div>
+                    <div class="card-body">
+                        <div v-for="(sel, idx) in config.pipeline_select" :key="idx" class="matcher-item">
+                            <div class="d-flex gap-2 mb-2 align-items-center">
+                                <span class="badge bg-secondary">#{{ idx + 1 }}</span>
+                                <select class="form-select form-select-sm" style="width: auto;" v-model="sel.pipeline">
+                                    <option disabled value="">选择 Pipeline</option>
+                                    <option v-for="p in config.pipelines" :value="p.id">{{ p.id }}</option>
+                                </select>
+                                <button class="btn btn-sm btn-outline-danger ms-auto" @click.stop="removePipelineSelect(idx)">删除</button>
+                            </div>
+                            <div class="ps-3 border-start">
+                                <div class="text-muted small mb-1">匹配条件 (Matchers):</div>
+                                <matcher-list :matchers="sel.matchers" :types="selectorMatcherTypes"></matcher-list>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipelines -->
+                <div class="card" data-outline-key="pipelines">
+                    <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+                        <span>处理流程 (Pipelines)</span>
+                        <button class="btn btn-sm btn-outline-primary" @click="addPipeline">+ 添加 Pipeline</button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="accordion" id="pipelineAccordion">
+                            <div v-for="(pipe, pIdx) in config.pipelines" :key="pIdx" class="accordion-item" :data-outline-key="'pipeline-' + pIdx">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button" :class="{ collapsed: activePipelineIndex !== pIdx }" type="button" @click="togglePipeline(pIdx)">
+                                        <span class="fw-bold me-2">{{ pipe.id }}</span>
+                                        <span class="badge bg-secondary">{{ pipe.rules.length }} 规则</span>
+                                    </button>
+                                </h2>
+                                <div class="accordion-collapse collapse" :class="{ show: activePipelineIndex === pIdx }">
+                                    <div class="accordion-body bg-light">
+                                        <div class="mb-3">
+                                            <label class="form-label">Pipeline ID</label>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" v-model="pipe.id" @focus="cacheOldPipelineId(pipe)" @blur="onPipelineIdBlur(pipe)">
+                                                <button class="btn btn-outline-danger" @click="removePipeline(pIdx)">删除 Pipeline</button>
+                                            </div>
+                                        </div>
+
+                                        <h6 class="fw-bold">规则列表 (Rules)</h6>
+                                        <div v-for="(rule, rIdx) in pipe.rules" :key="rIdx" class="card mb-3 shadow-sm" :data-outline-key="'rule-' + pIdx + '-' + rIdx">
+                                            <div class="card-header d-flex justify-content-between align-items-center py-1">
+                                                <input type="text" class="form-control form-control-sm w-50" v-model="rule.name" placeholder="规则名称">
+                                                <button class="btn btn-sm btn-close" @click="removeRule(pipe, rIdx)"></button>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="mb-2">
+                                                    <span class="badge bg-info text-dark">请求匹配 (Matchers)</span>
+                                                    <matcher-list :matchers="rule.matchers" :types="requestMatcherTypes"></matcher-list>
+                                                </div>
+                                                <div class="mb-2">
+                                                    <span class="badge bg-warning text-dark">执行动作 (Actions)</span>
+                                                    <action-list :actions="rule.actions" :pipelines="config.pipelines" :current-pipeline-id="pipe.id"></action-list>
+                                                </div>
+                                                <div v-if="ruleHasForwardAction(rule)">
+                                                    <span class="badge bg-success">响应匹配 (Response Matchers)</span>
+                                                    <matcher-list :matchers="rule.response_matchers" :types="responseMatcherTypes"></matcher-list>
+                                                    <div class="form-text small text-muted">仅在匹配 `forward` 动作时生效</div>
+                                                    <div class="mt-2">
+                                                        <span class="badge bg-primary">响应匹配成功动作</span>
+                                                        <action-list :actions="rule.response_actions_on_match" :pipelines="config.pipelines" :current-pipeline-id="pipe.id"></action-list>
+                                                    </div>
+                                                    <div class="mt-2">
+                                                        <span class="badge bg-danger">响应匹配失败动作</span>
+                                                        <action-list :actions="rule.response_actions_on_miss" :pipelines="config.pipelines" :current-pipeline-id="pipe.id"></action-list>
+                                                    </div>
+                                                    <div class="form-text small text-muted">收到上游响应后执行，成功/失败分支均可使用所有动作。</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-sm btn-outline-secondary w-100" @click="addRule(pipe)">+ 添加规则</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="editor-scroll-spacer" aria-hidden="true"></div>
+                </div> <!-- End of Editor Tab -->
+
+            </div>
+
+            <!-- Preview Pane -->
+            <div class="col-md-5 preview-pane p-4" :class="{ 'mobile-hidden': mobilePane !== 'json' }">
+                <div class="mb-3 d-flex align-items-center justify-content-between gap-2">
+                    <h4 class="mb-0">JSON 预览 / 编辑</h4>
+                    <button type="button" class="btn btn-sm btn-outline-light" :disabled="busy" @click="loadJson">应用到编辑器</button>
+                </div>
+                <textarea class="form-control font-monospace bg-dark text-light border-secondary"
+                    style="font-size: 12px; line-height: 1.5;"
+                    v-model="rawJson"
+                    spellcheck="false"
+                    aria-label="JSON 配置"
+                    @input="onRawJsonInput"></textarea>
+                <div class="small text-light opacity-75 mt-2">修改后先应用到编辑器，再保存/保存并应用。</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Component Templates -->
+    <script type="text/x-template" id="matcher-list-template">
+        <div>
+            <div v-for="(m, idx) in matchers" :key="idx" class="input-group input-group-sm mb-1">
+                <select v-if="withOperator" class="form-select" style="max-width: 120px;" v-model="m.operator">
+                    <option value="and">AND</option>
+                    <option value="or">OR</option>
+                    <option value="and_not">AND NOT</option>
+                    <option value="or_not">OR NOT</option>
+                    <option value="not">NOT</option>
+                </select>
+                <select class="form-select" style="max-width: 140px;" v-model="m.type" @change="resetMatcherFields(m)">
+                    <option v-for="(label, type) in types" :value="type">{{ label }}</option>
+                </select>
+
+                <!-- Dynamic Inputs based on type -->
+                <input v-if="hasField(m.type, 'value')" type="text" class="form-control" v-model="m.value"
+                    :placeholder="m.type === 'geo_site' || m.type === 'geo_site_not' || m.type === 'response_request_domain_geosite' || m.type === 'response_request_domain_geosite_not' ? 'cn 或 geosite:cn' : 'Value'">
+                <input v-if="hasField(m.type, 'cidr')" type="text" class="form-control" v-model="m.cidr" placeholder="CIDR 或逗号分隔列表 (e.g. 127.0.0.0/8,0.0.0.0/8)">
+                <div v-if="hasField(m.type, 'expect')" class="input-group-text bg-white">
+                    <input type="checkbox" class="form-check-input mt-0" v-model="m.expect"> &nbsp;Expect
+                </div>
+
+                <!-- GeoIP Country Codes -->
+                <input v-if="hasField(m.type, 'country_codes')" type="text" class="form-control" v-model="m.country_codes"
+                    placeholder="CN,US,JP 或 geoip:CN">
+
+                <!-- TXT Content Mode -->
+                <select v-if="hasField(m.type, 'mode') && m.type === 'response_txt_content'" class="form-select" v-model="m.mode">
+                    <option value="exact">Exact (精确匹配)</option>
+                    <option value="prefix">Prefix (前缀匹配)</option>
+                    <option value="regex">Regex (正则匹配)</option>
+                </select>
+
+                <!-- QType Dropdown -->
+                <select v-if="hasField(m.type, 'value') && m.type === 'qtype'" class="form-select" v-model="m.value">
+                    <option value="A">A</option>
+                    <option value="AAAA">AAAA</option>
+                    <option value="CNAME">CNAME</option>
+                    <option value="MX">MX</option>
+                    <option value="TXT">TXT</option>
+                    <option value="NS">NS</option>
+                    <option value="PTR">PTR</option>
+                    <option value="SOA">SOA</option>
+                    <option value="SRV">SRV</option>
+                    <option value="OPT">OPT</option>
+                </select>
+
+                <button class="btn btn-outline-danger" @click="matchers.splice(idx, 1)">×</button>
+            </div>
+            <button class="btn btn-sm btn-link text-decoration-none p-0" @click="addMatcher">+ 添加条件</button>
+        </div>
+    </script>
+
+    <script type="text/x-template" id="action-list-template">
+        <div>
+            <div v-for="(a, idx) in actions" :key="idx" class="input-group input-group-sm mb-1">
+                <select class="form-select" style="max-width: 160px;" v-model="a.type" @change="resetActionFields(a)">
+                    <option value="log">Log</option>
+                    <option value="static_response">Static Response</option>
+                    <option value="static_ip_response">Static IP</option>
+                    <option value="static_txt_response">Static TXT</option>
+                    <option value="replace_txt_response">Replace TXT</option>
+                    <option value="jump_to_pipeline">Jump to Pipeline</option>
+                    <option value="allow">Allow (Pass)</option>
+                    <option value="deny">Deny (Drop)</option>
+                    <option value="forward">Forward</option>
+                    <option value="continue">Continue</option>
+                </select>
+
+                <!-- Log -->
+                <select v-if="a.type === 'log'" class="form-select" v-model="a.level">
+                    <option value="trace">Trace</option>
+                    <option value="debug">Debug</option>
+                    <option value="info">Info</option>
+                    <option value="warn">Warn</option>
+                    <option value="error">Error</option>
+                </select>
+
+                <!-- Static Response -->
+                <select v-if="a.type === 'static_response'" class="form-select" v-model="a.rcode">
+                    <option value="NOERROR">NOERROR</option>
+                    <option value="NXDOMAIN">NXDOMAIN</option>
+                    <option value="SERVFAIL">SERVFAIL</option>
+                    <option value="REFUSED">REFUSED</option>
+                </select>
+
+                <!-- Static IP -->
+                <input v-if="a.type === 'static_ip_response'" type="text" class="form-control" v-model="a.ip" placeholder="IP Address">
+
+                <!-- Jump -->
+                <select v-if="a.type === 'jump_to_pipeline'" class="form-select" v-model="a.pipeline">
+                    <option disabled value="">选择 Pipeline</option>
+                    <option v-for="p in pipelineOptions" :key="p" :value="p" :disabled="p === currentPipelineId">{{ p }}</option>
+                </select>
+
+                <!-- Forward -->
+                <template v-if="a.type === 'forward'">
+                    <input type="text" class="form-control" v-model="a.upstream" placeholder="8.8.8.8:53 或 tcp://8.8.4.4:53,doh://dns.google/dns-query,dot://1.1.1.1:853,doq://dns.quad9.net:853">
+                    <select class="form-select" style="max-width: 110px;" v-model="a.transport">
+                        <option value="udp">UDP</option>
+                        <option value="tcp">TCP</option>
+                        <option value="tcp_udp">TCP+UDP</option>
+                        <option value="doh">DoH</option>
+                        <option value="dot">DoT</option>
+                        <option value="doq">DoQ</option>
+                    </select>
+                    <div class="form-text small" style="font-size: 11px;">支持协议前缀 (tcp://, udp://, doh://, dot://, doq://, https://, tls://, quic://) 以及逗号分隔的多个上游</div>
+                </template>
+
+                <!-- Static TXT -->
+                <template v-if="a.type === 'static_txt_response'">
+                    <textarea class="form-control" rows="2" v-model="a._textSingle" placeholder="每行一个 TXT 字符串"
+                        @input="updateTxtText(a)"></textarea>
+                    <button class="btn btn-outline-secondary" type="button" @click="a._showArray = !a._showArray">数组/TTL</button>
+                    <div v-if="a._showArray" class="input-group-text bg-white">
+                        TTL: <input type="number" class="form-control form-control-sm" style="max-width: 70px;" v-model.number="a.ttl" placeholder="300" min="1">
+                    </div>
+                    <div class="form-text small" style="font-size: 11px;">每行对应一个 TXT 字符串，字符串内可保留逗号</div>
+                </template>
+
+                <!-- Replace TXT -->
+                <template v-if="a.type === 'replace_txt_response'">
+                    <textarea class="form-control" rows="2" v-model="a._textSingle" placeholder="每行一个替换后的 TXT 字符串"
+                        @input="updateTxtText(a)"></textarea>
+                    <div class="form-text small" style="font-size: 11px;">每行对应一个 TXT 字符串，字符串内可保留逗号</div>
+                </template>
+
+                <button class="btn btn-outline-danger" @click="actions.splice(idx, 1)">×</button>
+            </div>
+            <button class="btn btn-sm btn-link text-decoration-none p-0" @click="addAction">+ 添加动作</button>
+        </div>
+    </script>
+
+    <script>
+        const { createApp, ref, watch, reactive, nextTick, computed } = Vue;
+
+        // Field definitions for matchers to simplify template logic
+        const MATCHER_FIELDS = {
+            'listener_label': ['value'],
+            'client_ip': ['cidr'],
+            'domain_suffix': ['value'],
+            'domain_regex': ['value'],
+            'qclass': ['value'],
+            'edns_present': ['expect'],
+            'geo_site': ['value'],
+            'geo_site_not': ['value'],
+            'geoip_country': ['country_codes'],
+            'geoip_private': ['expect'],
+            'qtype': ['value'],
+            'upstream_equals': ['value'],
+            'request_domain_suffix': ['value'],
+            'request_domain_regex': ['value'],
+            'response_type': ['value'],
+            'response_rcode': ['value'],
+            'response_qclass': ['value'],
+            'response_edns_present': ['expect'],
+            'response_upstream_ip': ['cidr'],
+            'response_answer_ip': ['cidr'],
+            'response_answer_ip_geoip_country': ['country_codes'],
+            'response_answer_ip_geoip_private': ['expect'],
+            'response_request_domain_geosite': ['value'],
+            'response_request_domain_geosite_not': ['value'],
+            'response_txt_content': ['mode', 'value'],
+            'any': []
+        };
+
+        // Parse call syntax like "geosite:cn" or "geoip:CN"
+        const parseCallSyntax = (value) => {
+            if (!value || typeof value !== 'string') return null;
+            const match = value.match(/^(\w+):(.+)$/);
+            if (match) {
+                const [, type, arg] = match;
+                return { type: type.toLowerCase(), arg: arg.trim() };
+            }
+            return null;
+        };
+
+        // Default logical operator for new matchers
+        const DEFAULT_MATCH_OPERATOR = 'and';
+
+        const MatcherList = {
+            template: '#matcher-list-template',
+            props: {
+                matchers: Array,
+                types: Object,
+                withOperator: {
+                    type: Boolean,
+                    default: true,
+                }
+            },
+            setup(props) {
+                const addMatcher = () => {
+                    const firstType = Object.keys(props.types)[0];
+                    props.matchers.push({ type: firstType, value: '', operator: DEFAULT_MATCH_OPERATOR });
+                };
+                const hasField = (type, field) => {
+                    return (MATCHER_FIELDS[type] || []).includes(field);
+                };
+                const resetMatcherFields = (m) => {
+                    // Keep type, clear others
+                    const type = m.type;
+                    for (const key in m) { if (key !== 'type' && key !== 'operator') delete m[key]; }
+
+                    // Handle call syntax for GeoSite and GeoIP
+                    if (hasField(type, 'value')) {
+                        if (type === 'qtype') {
+                            m.value = 'A'; // Default QType
+                        } else {
+                            m.value = '';
+                        }
+                    }
+                    if (hasField(type, 'cidr')) m.cidr = '';
+                    if (hasField(type, 'expect')) m.expect = true;
+                    if (hasField(type, 'country_codes')) {
+                        m.country_codes = '';
+                        // Support call syntax: "geoip:CN" or "geoip:CN,US,JP"
+                        m._callSyntax = false; // Track if using call syntax
+                    }
+                    if (hasField(type, 'value') && (type === 'geo_site' || type === 'geo_site_not' ||
+                        type === 'response_request_domain_geosite' || type === 'response_request_domain_geosite_not')) {
+                        m._callSyntax = false; // Track if using call syntax
+                    }
+                    if (!m.operator) m.operator = DEFAULT_MATCH_OPERATOR;
+                };
+
+                // Watch for call syntax in GeoSite and GeoIP matchers
+                const parseCallSyntaxForMatcher = (m) => {
+                    // Handle GeoSite matchers (request and response)
+                    if (m.type === 'geo_site' || m.type === 'geo_site_not' ||
+                        m.type === 'response_request_domain_geosite' || m.type === 'response_request_domain_geosite_not') {
+                        if (m.value && m.value.includes(':')) {
+                            const parsed = parseCallSyntax(m.value);
+                            if (parsed && parsed.type === 'geosite') {
+                                m.value = parsed.arg;
+                                m._callSyntax = true;
+                            }
+                        }
+                    }
+                    // Handle GeoIP Country matchers (request and response)
+                    if (m.type === 'geoip_country' || m.type === 'response_answer_ip_geoip_country') {
+                        if (m.country_codes && m.country_codes.includes(':')) {
+                            const parsed = parseCallSyntax(m.country_codes);
+                            if (parsed && parsed.type === 'geoip') {
+                                m.country_codes = parsed.arg;
+                                m._callSyntax = true;
+                            }
+                        }
+                    }
+                };
+
+                // Auto-parse call syntax when value changes
+                Vue.watch(() => props.matchers, (matchers) => {
+                    matchers.forEach(m => parseCallSyntaxForMatcher(m));
+                }, { deep: true });
+
+                return { addMatcher, hasField, resetMatcherFields };
+            }
+        };
+
+        const ActionList = {
+            template: '#action-list-template',
+            props: ['actions', 'pipelines', 'currentPipelineId'],
+            setup(props) {
+                const pipelineOptions = Vue.computed(() => (props.pipelines || []).map(p => p.id));
+                const addAction = () => {
+                    props.actions.push({ type: 'log', level: 'info' });
+                };
+                const resetActionFields = (a) => {
+                    const type = a.type;
+                    for (const key in a) { if (key !== 'type') delete a[key]; }
+                    if (type === 'log') a.level = 'info';
+                    if (type === 'static_response') a.rcode = 'NXDOMAIN';
+                    if (type === 'static_ip_response') a.ip = '127.0.0.1';
+                    if (type === 'static_txt_response') {
+                        a.text = ['v=spf1 ~all'];
+                        a._textSingle = 'v=spf1 ~all';
+                        a.ttl = 300;
+                        a._showArray = false;
+                    }
+                    if (type === 'replace_txt_response') {
+                        a.text = ['replaced'];
+                        a._textSingle = 'replaced';
+                        a._showArray = false;
+                    }
+                    if (type === 'jump_to_pipeline') a.pipeline = '';
+                    if (type === 'allow') { /* No fields */ }
+                    if (type === 'deny') { /* No fields */ }
+                    if (type === 'continue') { /* No fields */ }
+                    if (type === 'forward') { a.upstream = ''; a.transport = 'udp'; }
+                };
+
+                const updateTxtText = (a) => {
+                    if (a._textSingle !== undefined) {
+                        a.text = a._textSingle.split(/\r?\n/).map(s => s.trim()).filter(s => s);
+                    }
+                };
+
+                // 使用Vue 3的watch监听actions，确保text字段正确同步
+                const stopWatch = Vue.watch(() => props.pipelines, (pipelines) => {
+                    (pipelines || []).forEach(pipe => {
+                        (pipe.rules || []).forEach(rule => {
+                            [rule.actions, rule.response_actions_on_match, rule.response_actions_on_miss].forEach(actions => {
+                                (actions || []).forEach(a => {
+                                    if ((a.type === 'static_txt_response' || a.type === 'replace_txt_response') && a._textSingle === undefined && Array.isArray(a.text)) {
+                                        a._textSingle = a.text.join('\n');
+                                    }
+                                });
+                            });
+                        });
+                    });
+                }, { deep: true });
+
+                return { addAction, resetActionFields, pipelineOptions, updateTxtText };
+            }
+        };
+
+        createApp({
+            components: { MatcherList, ActionList },
+            setup() {
+                const hash32 = (str) => {
+                    // FNV-1a 32-bit, output base36 (Mermaid-safe)
+                    let h = 0x811c9dc5;
+                    for (let i = 0; i < str.length; i++) {
+                        h ^= str.charCodeAt(i);
+                        h = Math.imul(h, 0x01000193);
+                    }
+                    return (h >>> 0).toString(36);
+                };
+
+                const makeSafeId = (str) => {
+                    const base = (str ?? 'node').toString();
+                    let slug = base.replace(/[^a-zA-Z0-9_]/g, '_');
+                    slug = slug.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+                    if (!slug) slug = 'p';
+                    if (!/^[a-zA-Z]/.test(slug)) slug = 'p_' + slug;
+                    if (slug.length > 24) slug = slug.slice(0, 24);
+                    return `${slug}_${hash32(base)}`;
+                };
+
+                const config = ref({
+                    version: "1.0",
+                    settings: {
+                        min_ttl: 0,
+                        bind_udp: "0.0.0.0:5353",
+                        bind_tcp: "0.0.0.0:5353",
+                        default_upstream: "1.1.1.1:53",
+                        upstream_timeout_ms: 2000,
+                        request_timeout_ms: null,
+                        response_jump_limit: 10,
+                        udp_pool_size: 64,
+                        tcp_pool_size: 64,
+                        doh_pool_size: 8,
+                        dot_pool_size: 64,
+                        doq_pool_size: 16,
+                        tcp_health_check_error_threshold: 3,
+                        tcp_connection_max_age_seconds: 300,
+                        tcp_connection_idle_timeout_seconds: 60,
+                        doq_connection_idle_timeout_seconds: 60,
+                        doq_keepalive_interval_ms: 15000,
+                        doq_enable_0rtt: true,
+                        flow_control_initial_permits: 500,
+                        flow_control_min_permits: 100,
+                        flow_control_max_permits: 800,
+                        flow_control_latency_threshold_ms: 100,
+                        flow_control_adjustment_interval_secs: 5,
+                        cache_capacity: 10000,
+                        cache_max_ttl: 86400,
+                        dashmap_shards: 0,
+                        cache_background_refresh: false,
+                        cache_refresh_threshold_percent: 10,
+                        cache_refresh_min_ttl: 5,
+                        serve_stale: false,
+                        serve_stale_ttl: 30,
+                        serve_stale_expire_ttl: 86400,
+                        serve_stale_ttl_reset: true,
+                        serve_stale_client_timeout_ms: 0,
+                        flow_control_enabled: false,
+                        flow_control_initial_permits: 500,
+                        flow_control_min_permits: 100,
+                        flow_control_max_permits: 800,
+                        flow_control_latency_threshold_ms: 100,
+                        flow_control_adjustment_interval_secs: 5,
+                        geoip_db_path: "",
+                        geoip_dat_path: "",
+                        geoip_auto_convert: false,
+                        geoip_filter_countries: [],
+                        geosite_data_paths: [],
+                        enable_tcp_fallback: true,
+                        geosite_enabled: false
+                    },
+                    pipeline_select: [],
+                    pipelines: []
+                });
+
+                // GeoSite paths array for UI management
+                const geositePaths = ref([]);
+
+                // GeoIP filter countries string for UI management
+                const geoipFilterCountriesString = ref('');
+
+                // Computed property for GeoSite enable status
+                const geositeEnabled = Vue.computed({
+                    get: () => config.value.settings.geosite_enabled || false,
+                    set: (val) => {
+                        config.value.settings.geosite_enabled = val;
+                        // When disabled, clear the paths array
+                        if (!val) {
+                            geositePaths.value = [];
+                            config.value.settings.geosite_data_paths = [];
+                        }
+                    }
+                });
+
+                const rawJson = ref('');
+                const manualJsonEdit = ref(false);
+                const bridgeStatus = ref('正在读取本地配置...');
+                const bridgeStatusClass = ref('text-secondary');
+                const busy = ref(true);
+                const dirty = ref(false);
+                const mobilePane = ref('editor');
+                const editorPaneRef = ref(null);
+                const stickyControlsRef = ref(null);
+                const outlineRef = ref(null);
+                const activeOutlineKey = ref('settings');
+                const activePipelineIndex = ref(-1);
+                let outlineScrollFrame = 0;
+                let cancelPendingJumpEffect = null;
+                let programmaticOutlineKey = null;
+                let pendingSaveContent = null;
+                let syncingFromParent = false;
+                const themeParam = new URLSearchParams(window.location.search).get('theme');
+                let darkTheme = themeParam === 'dark' ||
+                    (themeParam !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+                const outlineItems = computed(() => {
+                    const items = [
+                        { key: 'settings', label: '全局设置', kind: 'section' },
+                        { key: 'pipeline-select', label: '分流规则', kind: 'section' },
+                        { key: 'pipelines', label: '处理流程', kind: 'section' }
+                    ];
+
+                    (config.value.pipelines || []).forEach((pipe, pIdx) => {
+                        const pipelineLabel = typeof pipe.id === 'string' && pipe.id.trim() ? pipe.id : `Pipeline ${pIdx + 1}`;
+                        items.push({
+                            key: `pipeline-${pIdx}`,
+                            label: pipelineLabel,
+                            kind: 'pipeline',
+                            pipelineIndex: pIdx
+                        });
+                        if (activePipelineIndex.value === pIdx) {
+                            (pipe.rules || []).forEach((rule, rIdx) => {
+                                items.push({
+                                    key: `rule-${pIdx}-${rIdx}`,
+                                    label: typeof rule.name === 'string' && rule.name.trim() ? rule.name : `Rule ${rIdx + 1}`,
+                                    kind: 'rule',
+                                    pipelineIndex: pIdx
+                                });
+                            });
+                        }
+                    });
+
+                    return items;
+                });
+
+                document.body.classList.toggle('theme-dark', darkTheme);
+                document.body.classList.toggle('theme-light', !darkTheme);
+
+                // Definitions
+                const selectorMatcherTypes = {
+                    'listener_label': 'Listener Label',
+                    'client_ip': 'Client IP',
+                    'domain_suffix': 'Domain Suffix',
+                    'domain_regex': 'Domain Regex',
+                    'any': 'Any',
+                    'qclass': 'QClass',
+                    'edns_present': 'EDNS Present',
+                    'geo_site': 'GeoSite',
+                    'geo_site_not': 'GeoSite Not',
+                    'geoip_country': 'GeoIP Country',
+                    'geoip_private': 'GeoIP Private',
+                    'qtype': 'QType'
+                };
+                const requestMatcherTypes = {
+                    'any': 'Any',
+                    'domain_suffix': 'Domain Suffix',
+                    'domain_regex': 'Domain Regex',
+                    'client_ip': 'Client IP',
+                    'qclass': 'QClass',
+                    'edns_present': 'EDNS Present',
+                    'geo_site': 'GeoSite',
+                    'geo_site_not': 'GeoSite Not',
+                    'geoip_country': 'GeoIP Country',
+                    'geoip_private': 'GeoIP Private',
+                    'qtype': 'QType'
+                };
+                const responseMatcherTypes = {
+                    'upstream_equals': 'Upstream Equals',
+                    'request_domain_suffix': 'Req Domain Suffix',
+                    'request_domain_regex': 'Req Domain Regex',
+                    'response_type': 'Response Type',
+                    'response_rcode': 'Response RCode',
+                    'response_qclass': 'Response QClass',
+                    'response_edns_present': 'Response EDNS',
+                    'response_upstream_ip': 'Upstream IP (CIDR)',
+                    'response_answer_ip': 'Answer IP (CIDR)',
+                    'response_answer_ip_geoip_country': 'Answer IP GeoIP Country',
+                    'response_answer_ip_geoip_private': 'Answer IP GeoIP Private',
+                    'response_request_domain_geosite': 'Req Domain GeoSite',
+                    'response_request_domain_geosite_not': 'Req Domain GeoSite Not',
+                    'response_txt_content': 'TXT Content'
+                };
+
+                const toCleanJsonString = (cfgObj) => JSON.stringify(cfgObj, (key, value) => {
+                    if (key && key.startsWith('_')) return undefined;
+                    // 过滤掉空的 geosite_data_paths 数组
+                    if (key === 'geosite_data_paths' && Array.isArray(value) && value.length === 0) {
+                        return undefined;
+                    }
+                    return value;
+                }, 2);
+
+                // Sync Config -> JSON
+                watch(config, (newVal) => {
+                    if (!manualJsonEdit.value) {
+                        rawJson.value = toCleanJsonString(newVal);
+                    }
+                    if (!syncingFromParent) {
+                        dirty.value = true;
+                    }
+                    // Sync geosite_data_paths to geositePaths array (单向同步，避免循环)
+                    if (Array.isArray(newVal.settings.geosite_data_paths)) {
+                        // 只有当真正不同时才更新，避免触发 watch
+                        const currentPaths = geositePaths.value.join(',');
+                        const newPaths = newVal.settings.geosite_data_paths.join(',');
+                        if (currentPaths !== newPaths) {
+                            // 使用 nextTick 避免同步触发其他 watch
+                            nextTick(() => {
+                                geositePaths.value = [...newVal.settings.geosite_data_paths];
+                            });
+                        }
+                    }
+                }, { deep: true });
+
+                // Sync geositePaths -> config.settings.geosite_data_paths (单向同步，避免循环)
+                watch(geositePaths, (newPaths) => {
+                    // 过滤掉空字符串，只保留有效的路径
+                    const filteredPaths = newPaths.filter(p => p && p.trim());
+                    // 只有当真正不同时才更新，避免触发 watch
+                    const currentConfigPaths = (config.value.settings.geosite_data_paths || []).join(',');
+                    const newConfigPaths = filteredPaths.join(',');
+                    if (currentConfigPaths !== newConfigPaths) {
+                        // 使用 nextTick 避免同步触发其他 watch
+                        nextTick(() => {
+                            config.value.settings.geosite_data_paths = filteredPaths;
+                        });
+                    }
+                }, { deep: true });
+
+                // Sync geoipFilterCountriesString -> config.settings.geoip_filter_countries (单向同步)
+                watch(geoipFilterCountriesString, (newStr) => {
+                    // 解析逗号分隔的字符串为数组
+                    const countries = newStr
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(s => s);
+                    // 只有当真正不同时才更新
+                    const currentCountries = (config.value.settings.geoip_filter_countries || []).join(',');
+                    const newCountries = countries.join(',');
+                    if (currentCountries !== newCountries) {
+                        config.value.settings.geoip_filter_countries = countries;
+                    }
+                });
+
+                // Sync config.settings.geoip_filter_countries -> geoipFilterCountriesString (单向同步)
+                watch(() => config.value.settings.geoip_filter_countries, (newCountries) => {
+                    const newStr = (newCountries || []).join(',');
+                    if (geoipFilterCountriesString.value !== newStr) {
+                        nextTick(() => {
+                            geoipFilterCountriesString.value = newStr;
+                        });
+                    }
+                }, { deep: true });
+
+                watch(() => config.value.pipelines, (pipes) => {
+                    (pipes || []).forEach(pipe => {
+                        if (pipe._syncInProgress) {
+                            return;
+                        }
+                        if (!pipe._syncedId) {
+                            pipe._syncedId = pipe.id;
+                            pipe._oldId = pipe.id;
+                            return;
+                        }
+                        if (pipe._syncedId !== pipe.id) {
+                            const safeId = ensureUniquePipelineId(pipe.id, pipe);
+                            if (safeId !== pipe.id) {
+                                pipe.id = safeId;
+                            }
+                            replacePipelineRefs(pipe._syncedId, pipe.id);
+                            pipe._oldId = pipe.id;
+                            pipe._syncedId = pipe.id;
+                        }
+                    });
+                }, { deep: true });
+
+                // Sync JSON -> Config (Manual Load)
+                const setBridgeStatus = (message, tone = 'secondary') => {
+                    bridgeStatus.value = message;
+                    bridgeStatusClass.value = `text-${tone}`;
+                };
+
+                const setEditorTheme = (dark) => {
+                    darkTheme = dark === true;
+                    document.body.classList.toggle('theme-dark', darkTheme);
+                    document.body.classList.toggle('theme-light', !darkTheme);
+                    mermaid.initialize({
+                        startOnLoad: false,
+                        securityLevel: 'strict',
+                        theme: darkTheme ? 'dark' : 'default'
+                    });
+                    if (currentTab.value === 'flowchart') renderFlowchart();
+                };
+
+                const loadJson = () => {
+                    try {
+                        const parsed = JSON.parse(rawJson.value);
+                        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                            throw new Error('配置根节点必须是对象');
+                        }
+                        parsed.settings = parsed.settings && typeof parsed.settings === 'object' && !Array.isArray(parsed.settings)
+                            ? parsed.settings : {};
+                        parsed.pipeline_select = Array.isArray(parsed.pipeline_select) ? parsed.pipeline_select : [];
+                        parsed.pipelines = Array.isArray(parsed.pipelines) ? parsed.pipelines : [];
+                        // attach _oldId/_syncedId for rename tracking
+                        parsed.pipelines.forEach(p => {
+                            p.rules = Array.isArray(p.rules) ? p.rules : [];
+                            p._oldId = p.id;
+                            p._syncedId = p.id;
+                            p.rules.forEach(r => normalizeRule(r));
+                        });
+                        parsed.pipeline_select.forEach(sel => normalizePipelineSelect(sel));
+                        config.value = parsed;
+                        activePipelineIndex.value = -1;
+                        activeOutlineKey.value = 'settings';
+                        programmaticOutlineKey = 'settings';
+                        nextTick(() => {
+                            if (editorPaneRef.value) editorPaneRef.value.scrollTo({ top: 0, behavior: 'auto' });
+                            window.requestAnimationFrame(() => {
+                                if (programmaticOutlineKey === 'settings') programmaticOutlineKey = null;
+                            });
+                        });
+                        manualJsonEdit.value = false;
+                        if (!syncingFromParent) {
+                            dirty.value = true;
+                            setBridgeStatus('JSON 已应用到结构化编辑器', 'success');
+                        }
+                        return true;
+                    } catch (e) {
+                        setBridgeStatus('JSON 解析失败: ' + e.message, 'danger');
+                        return false;
+                    }
+                };
+
+                const onRawJsonInput = () => {
+                    manualJsonEdit.value = true;
+                    dirty.value = true;
+                    setBridgeStatus('JSON 已修改，应用后可同步左侧', 'warning');
+                };
+
+                const postBridgeMessage = (type, payload = {}) => {
+                    if (window.parent === window) return false;
+                    window.parent.postMessage({
+                        source: 'kixdns-config-editor',
+                        type,
+                        ...payload
+                    }, '*');
+                    return true;
+                };
+
+                const requestLoad = () => {
+                    if (dirty.value && !window.confirm('重新读取会丢弃尚未保存的修改，是否继续？')) return;
+                    busy.value = true;
+                    setBridgeStatus('正在读取本地配置...', 'secondary');
+                    if (!postBridgeMessage('reload')) {
+                        busy.value = false;
+                        setBridgeStatus('独立预览模式，未连接 LuCI', 'secondary');
+                    }
+                };
+
+                const requestSave = (apply) => {
+                    if (manualJsonEdit.value && !loadJson()) return;
+
+                    const content = toCleanJsonString(config.value) + '\n';
+                    rawJson.value = content;
+                    pendingSaveContent = content;
+                    busy.value = true;
+                    setBridgeStatus(apply ? '正在保存并应用...' : '正在保存...', 'secondary');
+
+                    if (!postBridgeMessage('save', { content, apply })) {
+                        pendingSaveContent = null;
+                        busy.value = false;
+                        setBridgeStatus('独立预览模式，无法写入路由器', 'warning');
+                    }
+                };
+
+                const loadContentFromParent = (content) => {
+                    syncingFromParent = true;
+                    rawJson.value = String(content || '');
+                    manualJsonEdit.value = true;
+
+                    if (!loadJson()) {
+                        syncingFromParent = false;
+                        busy.value = false;
+                        return;
+                    }
+
+                    nextTick(() => {
+                        syncingFromParent = false;
+                        dirty.value = false;
+                        busy.value = false;
+                        setBridgeStatus('已读取本地配置', 'success');
+                    });
+                };
+
+                window.addEventListener('message', (event) => {
+                    if (event.source !== window.parent || !event.data || event.data.source !== 'luci-kixdns') return;
+
+                    if (event.data.type === 'load') {
+                        loadContentFromParent(event.data.content);
+                    } else if (event.data.type === 'theme') {
+                        setEditorTheme(event.data.dark);
+                    } else if (event.data.type === 'load-error') {
+                        busy.value = false;
+                        setBridgeStatus(event.data.message || '读取本地配置失败', 'danger');
+                    } else if (event.data.type === 'save-result') {
+                        busy.value = false;
+                        if (event.data.ok) {
+                            const currentContent = manualJsonEdit.value
+                                ? rawJson.value
+                                : toCleanJsonString(config.value) + '\n';
+                            if (pendingSaveContent === currentContent) {
+                                dirty.value = false;
+                                setBridgeStatus(event.data.apply ? '配置已保存并应用' : '配置已保存', 'success');
+                            } else {
+                                dirty.value = true;
+                                setBridgeStatus('保存完成，但编辑器中还有尚未保存的修改', 'warning');
+                            }
+                        } else {
+                            setBridgeStatus(event.data.message || '保存失败', 'danger');
+                        }
+                        pendingSaveContent = null;
+                    }
+                });
+
+                // Helper methods
+                const addPipelineSelect = () => {
+                    config.value.pipeline_select.push({ pipeline: '', matchers: [], matcher_operator: DEFAULT_MATCH_OPERATOR });
+                };
+                const removePipelineSelect = (idx) => {
+                    config.value.pipeline_select.splice(idx, 1);
+                };
+
+                const ensureUniquePipelineId = (base, self = null) => {
+                    const clean = base && base.trim() ? base.trim() : 'pipeline';
+                    let candidate = clean;
+                    let counter = 1;
+                    while (config.value.pipelines.some(p => p !== self && p.id === candidate)) {
+                        candidate = `${clean}_${counter++}`;
+                    }
+                    return candidate;
+                };
+
+                const generatePipelineId = () => {
+                    return ensureUniquePipelineId('pipeline');
+                };
+
+                const generateRuleName = (pipeline) => {
+                    const base = 'rule';
+                    let idx = 1;
+                    let candidate = `${base}_${idx}`;
+                    const existing = new Set(pipeline.rules.map(r => r.name));
+                    while (existing.has(candidate)) {
+                        idx += 1;
+                        candidate = `${base}_${idx}`;
+                    }
+                    return candidate;
+                };
+
+                const replacePipelineRefs = (oldId, newId) => {
+                    if (!oldId || oldId === newId) return;
+                    // selectors
+                    config.value.pipeline_select.forEach(sel => {
+                        if (sel.pipeline === oldId) sel.pipeline = newId;
+                    });
+                    // jump actions
+                    config.value.pipelines.forEach(pipe => {
+                        pipe.rules.forEach(rule => {
+                            rule.actions.forEach(a => {
+                                if (a.type === 'jump_to_pipeline' && a.pipeline === oldId) {
+                                    a.pipeline = newId;
+                                }
+                            });
+                            (rule.response_actions_on_match || []).forEach(a => {
+                                if (a.type === 'jump_to_pipeline' && a.pipeline === oldId) {
+                                    a.pipeline = newId;
+                                }
+                            });
+                            (rule.response_actions_on_miss || []).forEach(a => {
+                                if (a.type === 'jump_to_pipeline' && a.pipeline === oldId) {
+                                    a.pipeline = newId;
+                                }
+                            });
+                        });
+                    });
+                };
+
+                const countPipelineRefs = (pipelineId) => {
+                    let count = config.value.pipeline_select.filter(sel => sel.pipeline === pipelineId).length;
+                    config.value.pipelines.forEach(pipe => {
+                        pipe.rules.forEach(rule => {
+                            [rule.actions, rule.response_actions_on_match, rule.response_actions_on_miss]
+                                .forEach(actions => {
+                                    count += (actions || []).filter(action =>
+                                        action.type === 'jump_to_pipeline' && action.pipeline === pipelineId
+                                    ).length;
+                                });
+                        });
+                    });
+                    return count;
+                };
+
+                const normalizeMatcherOps = (items) => {
+                    (items || []).forEach(m => {
+                        if (!m.operator) m.operator = DEFAULT_MATCH_OPERATOR;
+                    });
+                };
+
+                const normalizeRule = (rule) => {
+                    rule.matchers = rule.matchers || [];
+                    rule.matcher_operator = rule.matcher_operator || DEFAULT_MATCH_OPERATOR;
+                    normalizeMatcherOps(rule.matchers);
+                    rule.actions = rule.actions || [];
+                    rule.response_matchers = rule.response_matchers || [];
+                    rule.response_matcher_operator = rule.response_matcher_operator || DEFAULT_MATCH_OPERATOR;
+                    normalizeMatcherOps(rule.response_matchers);
+                    rule.response_actions_on_match = rule.response_actions_on_match || [];
+                    rule.response_actions_on_miss = rule.response_actions_on_miss || [];
+                };
+
+                const normalizePipelineSelect = (sel) => {
+                    sel.matchers = sel.matchers || [];
+                    sel.matcher_operator = sel.matcher_operator || DEFAULT_MATCH_OPERATOR;
+                    normalizeMatcherOps(sel.matchers);
+                };
+
+                const cacheOldPipelineId = (pipe) => {
+                    pipe._oldId = pipe.id;
+                };
+
+                const markPipelineSync = (pipe) => {
+                    pipe._syncInProgress = true;
+                };
+
+                const clearPipelineSync = (pipe) => {
+                    pipe._syncInProgress = false;
+                    pipe._syncedId = pipe.id;
+                    pipe._oldId = pipe.id;
+                };
+
+                const onPipelineIdBlur = (pipe) => {
+                    const oldId = pipe._oldId || pipe.id;
+                    markPipelineSync(pipe);
+                    let newId = (pipe.id || '').trim();
+                    if (!newId) {
+                        alert('Pipeline ID 不能为空，将还原为原值');
+                        pipe.id = oldId;
+                        clearPipelineSync(pipe);
+                        return;
+                    }
+
+                    const uniqueId = ensureUniquePipelineId(newId, pipe);
+                    if (uniqueId !== newId) {
+                        alert(`Pipeline ID 已存在，已调整为 ${uniqueId}`);
+                    }
+
+                    pipe.id = uniqueId;
+                    if (oldId !== pipe.id) {
+                        replacePipelineRefs(oldId, pipe.id);
+                        alert(`已将 Pipeline ID 从 ${oldId} 更新为 ${pipe.id}，所有引用已同步`);
+                    }
+                    clearPipelineSync(pipe);
+                };
+
+                const addPipeline = () => {
+                    const newId = generatePipelineId();
+                    config.value.pipelines.push({ id: newId, rules: [], _oldId: newId });
+                    activePipelineIndex.value = config.value.pipelines.length - 1;
+                    activeOutlineKey.value = `pipeline-${activePipelineIndex.value}`;
+                    nextTick(keepActiveOutlineVisible);
+                };
+                const removePipeline = (idx) => {
+                    const pipeline = config.value.pipelines[idx];
+                    const referenceCount = pipeline ? countPipelineRefs(pipeline.id) : 0;
+                    if (referenceCount > 0) {
+                        alert(`无法删除 ${pipeline.id}：仍有 ${referenceCount} 处选择器或跳转动作引用它`);
+                        return;
+                    }
+                    config.value.pipelines.splice(idx, 1);
+                    if (activePipelineIndex.value === idx) {
+                        activePipelineIndex.value = -1;
+                        activeOutlineKey.value = 'pipelines';
+                    } else if (activePipelineIndex.value > idx) {
+                        activePipelineIndex.value -= 1;
+                        activeOutlineKey.value = `pipeline-${activePipelineIndex.value}`;
+                    }
+                };
+                const addRule = (pipeline) => {
+                    const name = generateRuleName(pipeline);
+                    const rule = {
+                        name,
+                        matchers: [],
+                        matcher_operator: DEFAULT_MATCH_OPERATOR,
+                        actions: [],
+                        response_matchers: [],
+                        response_matcher_operator: DEFAULT_MATCH_OPERATOR,
+                        response_actions_on_match: [],
+                        response_actions_on_miss: []
+                    };
+                    normalizeRule(rule);
+                    pipeline.rules.push(rule);
+                };
+                const removeRule = (pipeline, idx) => {
+                    pipeline.rules.splice(idx, 1);
+                };
+                const ruleHasForwardAction = (rule) => {
+                    return rule.actions.some(action => action.type === 'forward');
+                };
+
+                // GeoSite path management
+                const addGeositePath = () => {
+                    geositePaths.value.push('');
+                };
+                const removeGeositePath = (idx) => {
+                    geositePaths.value.splice(idx, 1);
+                };
+
+                const togglePipeline = (idx) => {
+                    const outlineKey = `pipeline-${idx}`;
+                    programmaticOutlineKey = outlineKey;
+                    activePipelineIndex.value = activePipelineIndex.value === idx ? -1 : idx;
+                    activeOutlineKey.value = outlineKey;
+                    nextTick(() => {
+                        keepActiveOutlineVisible();
+                        window.requestAnimationFrame(() => {
+                            if (programmaticOutlineKey === outlineKey) programmaticOutlineKey = null;
+                        });
+                    });
+                };
+
+                const currentTab = ref('editor');
+                const mermaidRef = ref(null);
+
+                const keepActiveOutlineVisible = () => {
+                    nextTick(() => {
+                        const nav = outlineRef.value;
+                        if (!nav) return;
+                        const button = Array.from(nav.querySelectorAll('[data-outline-button]'))
+                            .find(el => el.dataset.outlineButton === activeOutlineKey.value);
+                        if (!button) return;
+
+                        const navRect = nav.getBoundingClientRect();
+                        const buttonRect = button.getBoundingClientRect();
+                        let delta = 0;
+                        if (buttonRect.left < navRect.left + 4) {
+                            delta = buttonRect.left - navRect.left - 8;
+                        } else if (buttonRect.right > navRect.right - 4) {
+                            delta = buttonRect.right - navRect.right + 8;
+                        }
+                        if (delta) {
+                            nav.scrollTo({
+                                left: nav.scrollLeft + delta,
+                                behavior: prefersReducedMotion ? 'auto' : 'smooth'
+                            });
+                        }
+                    });
+                };
+
+                const syncOutlineFromScroll = () => {
+                    const pane = editorPaneRef.value;
+                    if (!pane || currentTab.value !== 'editor') return;
+                    const anchors = Array.from(pane.querySelectorAll('[data-outline-key]'))
+                        .filter(el => el.getClientRects().length > 0);
+                    if (!anchors.length) return;
+
+                    const paneTop = pane.getBoundingClientRect().top;
+                    const stickyHeight = stickyControlsRef.value ? stickyControlsRef.value.offsetHeight : 0;
+                    const threshold = paneTop + stickyHeight + 20;
+                    let nextKey = anchors[0].dataset.outlineKey;
+                    anchors.forEach(anchor => {
+                        if (anchor.getBoundingClientRect().top <= threshold) {
+                            nextKey = anchor.dataset.outlineKey;
+                        }
+                    });
+
+                    if (nextKey && activeOutlineKey.value !== nextKey) {
+                        activeOutlineKey.value = nextKey;
+                        keepActiveOutlineVisible();
+                    }
+                };
+
+                const onEditorScroll = () => {
+                    if (programmaticOutlineKey) return;
+                    if (outlineScrollFrame) return;
+                    outlineScrollFrame = window.requestAnimationFrame(() => {
+                        outlineScrollFrame = 0;
+                        syncOutlineFromScroll();
+                    });
+                };
+
+                const onOutlineWheel = (event) => {
+                    const nav = outlineRef.value;
+                    if (!nav || nav.scrollWidth <= nav.clientWidth) return;
+                    const delta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+                    const maxScroll = nav.scrollWidth - nav.clientWidth;
+                    const nextScroll = Math.max(0, Math.min(maxScroll, nav.scrollLeft + delta));
+                    if (nextScroll !== nav.scrollLeft) {
+                        nav.scrollLeft = nextScroll;
+                        event.preventDefault();
+                    }
+                };
+
+                const flashOutlineTarget = (target) => {
+                    target.classList.remove('outline-target-flash');
+                    target.offsetWidth;
+                    target.classList.add('outline-target-flash');
+                    target.addEventListener('animationend', () => {
+                        target.classList.remove('outline-target-flash');
+                    }, { once: true });
+                };
+
+                const waitForScrollSettle = (pane, destination, callback) => {
+                    let cancelled = false;
+                    let frameId = 0;
+
+                    if ('onscrollend' in pane) {
+                        const onScrollEnd = () => {
+                            if (!cancelled) callback();
+                        };
+                        pane.addEventListener('scrollend', onScrollEnd, { once: true });
+                        return () => {
+                            cancelled = true;
+                            pane.removeEventListener('scrollend', onScrollEnd);
+                        };
+                    }
+
+                    let lastTop = pane.scrollTop;
+                    let moved = false;
+                    let idleSince = window.performance.now();
+                    const checkPosition = (now) => {
+                        if (cancelled) return;
+                        const currentTop = pane.scrollTop;
+                        if (Math.abs(currentTop - lastTop) > .5) {
+                            moved = true;
+                            lastTop = currentTop;
+                            idleSince = now;
+                        }
+                        const arrived = Math.abs(currentTop - destination) <= 1;
+                        if (arrived || (moved && now - idleSince >= 120)) {
+                            callback();
+                            return;
+                        }
+                        frameId = window.requestAnimationFrame(checkPosition);
+                    };
+                    frameId = window.requestAnimationFrame(checkPosition);
+                    return () => {
+                        cancelled = true;
+                        if (frameId) window.cancelAnimationFrame(frameId);
+                    };
+                };
+
+                const showEditor = async () => {
+                    currentTab.value = 'editor';
+                    await nextTick();
+                    syncOutlineFromScroll();
+                };
+
+                const jumpToOutline = async (item) => {
+                    if (cancelPendingJumpEffect) {
+                        cancelPendingJumpEffect();
+                        cancelPendingJumpEffect = null;
+                    }
+                    programmaticOutlineKey = item.key;
+                    currentTab.value = 'editor';
+                    mobilePane.value = 'editor';
+                    activeOutlineKey.value = item.key;
+                    if (item.kind === 'pipeline') {
+                        activePipelineIndex.value = activePipelineIndex.value === item.pipelineIndex ? -1 : item.pipelineIndex;
+                    } else if (item.kind === 'rule' && Number.isInteger(item.pipelineIndex)) {
+                        activePipelineIndex.value = item.pipelineIndex;
+                    }
+
+                    await nextTick();
+                    const pane = editorPaneRef.value;
+                    if (!pane) {
+                        programmaticOutlineKey = null;
+                        return;
+                    }
+                    const target = Array.from(pane.querySelectorAll('[data-outline-key]'))
+                        .find(el => el.dataset.outlineKey === item.key);
+                    if (!target) {
+                        programmaticOutlineKey = null;
+                        return;
+                    }
+
+                    const paneTop = pane.getBoundingClientRect().top;
+                    const stickyHeight = stickyControlsRef.value ? stickyControlsRef.value.offsetHeight : 0;
+                    const targetTop = pane.scrollTop + target.getBoundingClientRect().top - paneTop - stickyHeight - 12;
+                    const destination = Math.max(0, Math.min(pane.scrollHeight - pane.clientHeight, targetTop));
+
+                    const revealTarget = () => {
+                        cancelPendingJumpEffect = null;
+                        programmaticOutlineKey = null;
+                        flashOutlineTarget(target);
+                    };
+
+                    if (prefersReducedMotion || Math.abs(pane.scrollTop - destination) <= 1) {
+                        pane.scrollTo({ top: destination, behavior: 'auto' });
+                        revealTarget();
+                    } else {
+                        cancelPendingJumpEffect = waitForScrollSettle(pane, destination, revealTarget);
+                        pane.scrollTo({ top: destination, behavior: 'smooth' });
+                    }
+                    keepActiveOutlineVisible();
+                };
+
+                const summarizeMatchers = (ms) => {
+                    if (!ms || ms.length === 0) return 'ANY';
+                    return ms
+                        .map((m, idx) => {
+                            const op = idx === 0 ? '' : m.operator?.toUpperCase() || 'AND';
+                            const type = m.type || m.matcher?.type || m.matcher?.matcher?.type || 'matcher';
+                            const val = m.value || m.cidr || (m.expect === true || m.expect === false ? `expect=${m.expect}` : '');
+                            const body = val ? `${type}:${val}` : type;
+                            return op ? `${op} ${body}` : body;
+                        })
+                        .join(' ');
+                };
+
+                const escapeMermaidText = (value) => String(value ?? '')
+                    .replace(/[\r\n]+/g, ' ')
+                    .replace(/\\/g, '＼')
+                    .replace(/"/g, '＂')
+                    .replace(/\[/g, '［')
+                    .replace(/\]/g, '］')
+                    .replace(/\{/g, '｛')
+                    .replace(/\}/g, '｝')
+                    .replace(/\|/g, '｜');
+
+                const renderFlowchart = async () => {
+                    currentTab.value = 'flowchart';
+                    await nextTick();
+
+                    const idMap = {};
+                    const usedSafeIds = new Set();
+                    (config.value.pipelines || []).forEach(p => {
+                        let safe = makeSafeId(p.id);
+                        let counter = 1;
+                        while (usedSafeIds.has(safe)) {
+                            safe = `${makeSafeId(p.id)}_${counter++}`;
+                        }
+                        usedSafeIds.add(safe);
+                        idMap[p.id] = safe;
+                    });
+
+                    // IMPORTANT: Cross-subgraph edges must be emitted after all subgraphs declare their nodes.
+                    // Otherwise Mermaid may auto-create the target node inside the current subgraph.
+                    const postEdges = [];
+
+                    let graph = "graph TD\n";
+                    graph += "  Start((Start)) --> Select{Selector}\n";
+
+                    // Pipelines and rules (ordered), wrapped inside subgraphs for better grouping
+                    config.value.pipelines.forEach(pipe => {
+                        const pid = pipe.id;
+                        const pidSafe = idMap[pid];
+                        const entryId = `${pidSafe}_entry`;
+
+                        graph += `  subgraph ${pidSafe}_sg["${escapeMermaidText(pid)}"]\n`;
+                        graph += `    direction TB\n`;
+                        graph += `    ${entryId}([入口])\n`;
+
+                        const rules = pipe.rules || [];
+                        rules.forEach((rule, rIdx) => {
+                            const rid = `${pidSafe}_r${rIdx}`;
+                            const label = rule.name ? `${rIdx + 1}. ${rule.name}` : `Rule ${rIdx + 1}`;
+
+                            graph += `    ${rid}[["${escapeMermaidText(label)}"]]\n`;
+
+                            // Jump edges from this rule's actions
+                            (rule.actions || []).forEach(action => {
+                                if (action.type === 'jump_to_pipeline' && action.pipeline) {
+                                    const targetSafe = idMap[action.pipeline] || makeSafeId(action.pipeline);
+                                    const targetEntry = `${targetSafe}_entry`;
+                                    postEdges.push(`  ${rid} -. "jump" .-> ${targetEntry}\n`);
+                                }
+                            });
+                            (rule.response_actions_on_match || []).forEach(action => {
+                                if (action.type === 'jump_to_pipeline' && action.pipeline) {
+                                    const targetSafe = idMap[action.pipeline] || makeSafeId(action.pipeline);
+                                    const targetEntry = `${targetSafe}_entry`;
+                                    postEdges.push(`  ${rid} -. "resp match jump" .-> ${targetEntry}\n`);
+                                }
+                            });
+                            (rule.response_actions_on_miss || []).forEach(action => {
+                                if (action.type === 'jump_to_pipeline' && action.pipeline) {
+                                    const targetSafe = idMap[action.pipeline] || makeSafeId(action.pipeline);
+                                    const targetEntry = `${targetSafe}_entry`;
+                                    postEdges.push(`  ${rid} -. "resp miss jump" .-> ${targetEntry}\n`);
+                                }
+                            });
+
+                            // Sequential edges inside pipeline, labeled with request matchers
+                            const matcherLabel = escapeMermaidText(summarizeMatchers(rule.matchers));
+                            if (rIdx === 0) {
+                                graph += `    ${entryId} -->|"${matcherLabel}"| ${rid}\n`;
+                            } else {
+                                const prevId = `${pidSafe}_r${rIdx - 1}`;
+                                graph += `    ${prevId} -->|"${matcherLabel}"| ${rid}\n`;
+                            }
+                        });
+
+                        graph += `  end\n`;
+                    });
+
+                    // Pipeline Selectors with labeled edges (after subgraphs so entry nodes exist)
+                    config.value.pipeline_select.forEach((sel, idx) => {
+                        if (sel.pipeline) {
+                            const label = escapeMermaidText(summarizeMatchers(sel.matchers));
+                            const targetSafe = idMap[sel.pipeline] || makeSafeId(sel.pipeline);
+                            const entryId = `${targetSafe}_entry`;
+                            graph += `  Select -- "#${idx+1}: ${label}" --> ${entryId}\n`;
+                        }
+                    });
+
+                    // Emit cross-pipeline edges last to ensure targets are declared in their own subgraphs.
+                    postEdges.forEach(e => {
+                        graph += e;
+                    });
+
+                    if (mermaidRef.value) {
+                        mermaidRef.value.innerHTML = '';
+                        try {
+                            const { svg } = await mermaid.render('graphDiv' + Date.now(), graph);
+                            mermaidRef.value.innerHTML = svg;
+                        } catch (e) {
+                            const errorNode = document.createElement('div');
+                            errorNode.className = 'text-danger';
+                            errorNode.textContent = 'Error rendering graph: ' + e.message;
+                            mermaidRef.value.replaceChildren(errorNode);
+                            console.error(e);
+                        }
+                    }
+                };
+
+                mermaid.initialize({
+                    startOnLoad: false,
+                    securityLevel: 'strict',
+                    theme: darkTheme ? 'dark' : 'default'
+                });
+
+                // Initialize with default JSON
+                rawJson.value = toCleanJsonString(config.value);
+
+                // Initialize geositePaths from config
+                if (Array.isArray(config.value.settings.geosite_data_paths)) {
+                    geositePaths.value = [...config.value.settings.geosite_data_paths];
+                }
+
+                // Initialize geoipFilterCountriesString from config
+                if (Array.isArray(config.value.settings.geoip_filter_countries)) {
+                    geoipFilterCountriesString.value = config.value.settings.geoip_filter_countries.join(',');
+                }
+
+                // Initialize geositeEnabled from config
+                geositeEnabled.value = config.value.settings.geosite_enabled || false;
+
+                if (window.parent !== window) {
+                    nextTick(() => postBridgeMessage('ready'));
+                } else {
+                    busy.value = false;
+                    bridgeStatus.value = '独立预览模式';
+                }
+
+                return {
+                    config, rawJson, manualJsonEdit, geositePaths, geoipFilterCountriesString, geositeEnabled,
+                    bridgeStatus, bridgeStatusClass, busy, mobilePane,
+                    editorPaneRef, stickyControlsRef, outlineRef, outlineItems, activeOutlineKey,
+                    selectorMatcherTypes, requestMatcherTypes, responseMatcherTypes,
+                    loadJson, onRawJsonInput, requestLoad, requestSave,
+                    addPipelineSelect, removePipelineSelect,
+                    addPipeline, removePipeline,
+                    addRule, removeRule,
+                    ruleHasForwardAction,
+                    activePipelineIndex, togglePipeline,
+                    showEditor, jumpToOutline, onEditorScroll, onOutlineWheel,
+                    currentTab, mermaidRef, renderFlowchart,
+                    addGeositePath, removeGeositePath
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

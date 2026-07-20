@@ -1,0 +1,239 @@
+#!/bin/sh /etc/rc.common
+
+START=95
+STOP=10
+USE_PROCD=1
+EXTRA_COMMANDS="update_config install_config"
+EXTRA_HELP="\tupdate_config [URL]\tDownload and install a remote pipeline configuration
+\tinstall_config\t\tValidate and install the staged local pipeline configuration"
+
+PROG=/usr/bin/kixdns
+NFT_TABLE=kixdns
+
+CONFFILE=/etc/kixdns/pipeline.json
+STAGED_CONFIG=/etc/kixdns/pipeline.json.new
+GEOIPFILE=/etc/kixdns/geoip.dat
+
+flush_hijack() {
+	nft delete table inet "$NFT_TABLE" 2>/dev/null
+	return 0
+}
+
+setup_hijack() {
+	local hijack udp_port tcp_port lan_device
+
+	config_get_bool hijack main hijack 0
+	[ "$hijack" -eq 1 ] || return 0
+
+	udp_port="$(jsonfilter -i "$CONFFILE" -e '@.settings.bind_udp' 2>/dev/null)"
+	udp_port="${udp_port##*:}"
+	tcp_port="$(jsonfilter -i "$CONFFILE" -e '@.settings.bind_tcp' 2>/dev/null)"
+	tcp_port="${tcp_port##*:}"
+	case "$udp_port" in
+		''|*[!0-9]*) udp_port=5353 ;;
+	esac
+	case "$tcp_port" in
+		''|*[!0-9]*) tcp_port=5353 ;;
+	esac
+	[ "$udp_port" -ge 1 ] && [ "$udp_port" -le 65535 ] 2>/dev/null || udp_port=5353
+	[ "$tcp_port" -ge 1 ] && [ "$tcp_port" -le 65535 ] 2>/dev/null || tcp_port=5353
+
+	lan_device="$(ubus -S call network.interface.lan status 2>/dev/null | jsonfilter -e '@.l3_device')"
+	case "$lan_device" in
+		''|*[!A-Za-z0-9_.:-]*)
+			logger -t kixdns "cannot determine the LAN device, skipping DNS hijack"
+			return 1
+			;;
+	esac
+
+	nft -f - <<-EOF
+		table inet $NFT_TABLE {
+			chain dstnat {
+				type nat hook prerouting priority -105; policy accept;
+				iifname "$lan_device" udp dport 53 counter redirect to :$udp_port
+				iifname "$lan_device" tcp dport 53 counter redirect to :$tcp_port
+			}
+		}
+	EOF
+}
+
+clear_oversized_log() {
+	local log_file="$1" log_size="$2" sz
+
+	[ -f "$log_file" ] || return 0
+	case "$log_size" in
+		''|*[!0-9]*) log_size=1024 ;;
+	esac
+	[ "${#log_size}" -le 7 ] && [ "$log_size" -ge 1 ] && [ "$log_size" -le 1048576 ] 2>/dev/null || \
+		log_size=1024
+	sz="$(wc -c < "$log_file" 2>/dev/null)"
+	[ "${sz:-0}" -gt "$((log_size * 1024))" ] && : > "$log_file"
+	return 0
+}
+
+download_file() {
+	local url="$1" output="$2" max_size="$3"
+
+	case "$url" in
+		http://*|https://*) ;;
+		*) echo "download URL must use HTTP or HTTPS" >&2; return 1 ;;
+	esac
+
+	curl --fail --location --silent --show-error \
+		--proto '=http,https' --proto-redir '=http,https' \
+		--max-filesize "$max_size" \
+		--connect-timeout 30 --max-time 300 --output "$output" --url "$url"
+}
+
+download_geoip() {
+	local url="$1" tmp
+
+	[ -n "$url" ] || return 0
+
+	tmp="${GEOIPFILE}.download.$$"
+	mkdir -p "${GEOIPFILE%/*}"
+	logger -t kixdns "downloading GeoIP database"
+
+	if ! download_file "$url" "$tmp" 33554432 || [ ! -s "$tmp" ]; then
+		logger -t kixdns "failed to download GeoIP database, keeping the existing file"
+		rm -f "$tmp"
+		return 1
+	fi
+
+	chmod 0644 "$tmp"
+	if ! mv -f "$tmp" "$GEOIPFILE"; then
+		logger -t kixdns "failed to install downloaded GeoIP database"
+		rm -f "$tmp"
+		return 1
+	fi
+
+	logger -t kixdns "GeoIP database updated at $GEOIPFILE"
+	return 0
+}
+
+install_pipeline_file() {
+	local source="$1" backup="${CONFFILE}.bak"
+
+	[ -s "$source" ] || {
+		rm -f "$source"
+		echo "staged configuration is empty" >&2
+		return 1
+	}
+
+	if ! jsonfilter -i "$source" -e '@' >/dev/null 2>&1; then
+		logger -t kixdns "staged pipeline configuration is not valid JSON"
+		rm -f "$source"
+		echo "configuration is not valid JSON, keeping the local file" >&2
+		return 1
+	fi
+
+	if [ -f "$CONFFILE" ] && ! cp -p "$CONFFILE" "$backup"; then
+		rm -f "$source"
+		echo "failed to back up the local configuration" >&2
+		return 1
+	fi
+
+	if ! chmod 0644 "$source" || ! mv -f "$source" "$CONFFILE"; then
+		rm -f "$source"
+		echo "failed to install the staged configuration" >&2
+		return 1
+	fi
+
+	logger -t kixdns "pipeline configuration installed at $CONFFILE"
+	echo "pipeline configuration installed"
+	return 0
+}
+
+install_config() {
+	install_pipeline_file "$STAGED_CONFIG"
+}
+
+update_config() {
+	local url="${1:-}" tmp
+
+	if [ -z "$url" ]; then
+		config_load kixdns
+		config_get url main config_download_url ''
+	fi
+
+	[ -n "$url" ] || {
+		echo "configuration download URL is empty" >&2
+		return 1
+	}
+
+	tmp="${CONFFILE}.download.$$"
+	mkdir -p "${CONFFILE%/*}"
+	logger -t kixdns "downloading remote pipeline configuration"
+
+	if ! download_file "$url" "$tmp" 2097152 || [ ! -s "$tmp" ]; then
+		logger -t kixdns "failed to download pipeline configuration, keeping the local file"
+		rm -f "$tmp"
+		echo "failed to download configuration, keeping the local file" >&2
+		return 1
+	fi
+
+	install_pipeline_file "$tmp" || return 1
+
+	if [ -n "${1:-}" ]; then
+		uci -q set "kixdns.main.config_download_url=$url" && uci -q commit kixdns || \
+			logger -t kixdns "pipeline updated, but failed to save the configuration download URL"
+	fi
+
+	logger -t kixdns "pipeline configuration updated at $CONFFILE"
+	echo "pipeline configuration updated"
+	return 0
+}
+
+start_service() {
+	local enabled listener_label udp_workers geoip_download_url debug rust_log log_file log_size
+
+	config_load kixdns
+
+	flush_hijack
+
+	config_get_bool enabled main enabled 0
+	[ "$enabled" -eq 1 ] || return 0
+
+	config_get listener_label main listener_label default
+	config_get udp_workers main udp_workers ''
+	config_get geoip_download_url main geoip_download_url ''
+	config_get_bool debug main debug 0
+	config_get rust_log main rust_log 'error,kixdns::engine::matcher_adapter=info'
+	log_file=/tmp/kixdns.log
+	config_get log_size main log_size 1024
+
+	[ -f "$CONFFILE" ] || {
+		logger -t kixdns "config file $CONFFILE not found, not starting"
+		return 1
+	}
+
+	mkdir -p "${log_file%/*}"
+	clear_oversized_log "$log_file" "$log_size"
+	download_geoip "$geoip_download_url" || true
+
+	procd_open_instance kixdns
+	# keep daemon output out of syslog: redirect stdout/stderr to a dedicated log file
+	procd_set_param command /bin/sh -c "exec \"\$0\" \"\$@\" >>'$log_file' 2>&1" \
+		"$PROG" run -c "$CONFFILE" --listener-label "$listener_label"
+	[ -n "$udp_workers" ] && procd_append_param command --udp-workers "$udp_workers"
+	[ "$debug" -eq 1 ] && procd_append_param command --debug
+	[ -n "$rust_log" ] && procd_set_param env RUST_LOG="$rust_log"
+	procd_set_param file "$CONFFILE"
+	procd_set_param respawn 3600 5 5
+	procd_set_param limits nofile="65536 65536"
+	procd_close_instance
+
+	setup_hijack
+}
+
+stop_service() {
+	flush_hijack
+}
+
+reload_service() {
+	restart
+}
+
+service_triggers() {
+	procd_add_reload_trigger "kixdns"
+}

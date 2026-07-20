@@ -1,0 +1,40 @@
+{
+	"admin/services/kixdns": {
+		"title": "KixDNS",
+		"order": 60,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [ "luci-app-kixdns" ],
+			"uci": { "kixdns": true }
+		}
+	},
+
+	"admin/services/kixdns/overview": {
+		"title": "Overview",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "kixdns/overview"
+		}
+	},
+
+	"admin/services/kixdns/config": {
+		"title": "Config Editor",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "kixdns/config"
+		}
+	},
+
+	"admin/services/kixdns/log": {
+		"title": "Log",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "kixdns/log"
+		}
+	}
+}

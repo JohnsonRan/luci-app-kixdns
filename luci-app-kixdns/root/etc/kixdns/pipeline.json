@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "settings": {
+    "bind_udp": "0.0.0.0:5353",
+    "bind_tcp": "0.0.0.0:5353",
+    "default_upstream": "223.5.5.5:53",
+    "upstream_timeout_ms": 2000,
+    "min_ttl": 30,
+    "geoip_dat_path": "/etc/kixdns/geoip.dat"
+  },
+  "pipelines": [
+    {
+      "id": "default",
+      "rules": [
+        {
+          "name": "forward_all",
+          "matchers": [ { "type": "any" } ],
+          "actions": [
+            { "type": "log", "level": "info" },
+            { "type": "forward", "upstream": "223.5.5.5:53" }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,256 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-kixdns\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: zh_Hans\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "KixDNS"
+msgstr "KixDNS"
+
+msgid ""
+"KixDNS is a high-performance, non-recursive DNS forwarding server. Edit the "
+"pipeline rules in the \"Config Editor\" tab."
+msgstr "KixDNS 是一个高性能、非递归的 DNS 转发服务器。可在“配置编辑器”标签页中编辑 pipeline 规则。"
+
+msgid "Overview"
+msgstr "概览"
+
+msgid "Config Editor"
+msgstr "配置编辑器"
+
+msgid "Log"
+msgstr "日志"
+
+msgid "Service Status"
+msgstr "服务状态"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "RUNNING"
+msgstr "运行中"
+
+msgid "NOT RUNNING"
+msgstr "未运行"
+
+msgid "General Settings"
+msgstr "基本设置"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Enable and start the KixDNS service."
+msgstr "启用并启动 KixDNS 服务。"
+
+msgid "DNS Hijack"
+msgstr "DNS 劫持"
+
+msgid ""
+"Redirect all DNS requests (port 53, UDP/TCP) from LAN clients to KixDNS via "
+"nftables. The redirect target port is taken from \"bind_udp\" in the "
+"pipeline config."
+msgstr ""
+"通过 nftables 将局域网客户端的所有 DNS 请求（53 端口，UDP/TCP）重定向到 "
+"KixDNS。重定向目标端口取自 pipeline 配置中的 \"bind_udp\"。"
+
+msgid "Listener label"
+msgstr "监听器标签"
+
+msgid "Value passed to --listener-label for pipeline selection."
+msgstr "传递给 --listener-label 的值，用于 pipeline 选择。"
+
+msgid "UDP workers"
+msgstr "UDP 工作线程数"
+
+msgid "Number of UDP worker threads. Leave empty to use the number of CPU cores."
+msgstr "UDP 工作线程数量。留空则使用 CPU 核心数。"
+
+msgid "auto"
+msgstr "自动"
+
+msgid "GeoIP download URL"
+msgstr "GeoIP 下载 URL"
+
+msgid ""
+"Download a V2Ray GeoIP database to /etc/kixdns/geoip.dat before each service "
+"start. Leave empty to disable downloading."
+msgstr ""
+"每次服务启动前将 V2Ray GeoIP 数据库下载到 /etc/kixdns/geoip.dat。"
+"留空则不下载。"
+
+msgid "Configuration download URL"
+msgstr "配置文件下载 URL"
+
+msgid ""
+"KixDNS always uses the local /etc/kixdns/pipeline.json. The remote file is "
+"downloaded only when you click \"Update configuration\"."
+msgstr ""
+"KixDNS 始终使用本地 /etc/kixdns/pipeline.json。仅在点击“更新配置”时下载"
+"远程文件。"
+
+msgid "Remote configuration"
+msgstr "远程配置"
+
+msgid ""
+"Download from the URL above, validate the JSON, and replace the local "
+"configuration now. The previous local file is kept as "
+"/etc/kixdns/pipeline.json.bak."
+msgstr ""
+"立即从上方 URL 下载并校验 JSON，然后替换本地配置。原本的本地文件将保存在 "
+"/etc/kixdns/pipeline.json.bak。"
+
+msgid "Update configuration"
+msgstr "更新配置"
+
+msgid "Enter a configuration download URL first."
+msgstr "请先填写配置文件下载 URL。"
+
+msgid "Configuration updated and KixDNS restarted."
+msgstr "配置已更新，KixDNS 已重启。"
+
+msgid "Configuration update failed"
+msgstr "配置更新失败"
+
+msgid "Command failed"
+msgstr "命令执行失败"
+
+msgid "KixDNS configuration editor"
+msgstr "KixDNS 配置编辑器"
+
+msgid "Configuration file is missing or unreadable."
+msgstr "配置文件不存在或无法读取。"
+
+msgid "The local configuration changed after this editor loaded. Reload it before saving."
+msgstr "本地配置在编辑器打开后已发生变化，请重新读取后再保存。"
+
+msgid "Configuration saved."
+msgstr "配置已保存。"
+
+msgid "Log filter (RUST_LOG)"
+msgstr "日志过滤器（RUST_LOG）"
+
+msgid "Tracing filter passed via the RUST_LOG environment variable."
+msgstr "通过 RUST_LOG 环境变量传递的 tracing 过滤器。"
+
+msgid "Errors + matcher logs (recommended)"
+msgstr "错误 + 匹配器日志（推荐）"
+
+msgid "Errors only"
+msgstr "仅错误"
+
+msgid "Info"
+msgstr "信息"
+
+msgid "Debug"
+msgstr "调试"
+
+msgid "Debug logging"
+msgstr "调试日志"
+
+msgid "Pass --debug to the daemon."
+msgstr "向守护进程传递 --debug 参数。"
+
+msgid "KixDNS - Config Editor"
+msgstr "KixDNS - 配置编辑器"
+
+msgid ""
+"Edit the pipeline configuration (%s). The content must be valid JSON; it is "
+"validated before saving. KixDNS also supports hot-reloading the config file."
+msgstr ""
+"编辑 pipeline 配置文件（%s）。内容必须是合法的 JSON，保存前会进行校验。"
+"KixDNS 也支持配置文件热重载。"
+
+msgid "line"
+msgstr "行"
+
+msgid "column"
+msgstr "列"
+
+msgid "JSON is valid."
+msgstr "JSON 校验通过。"
+
+msgid "JSON is valid, formatted."
+msgstr "JSON 校验通过，已格式化。"
+
+msgid "Invalid JSON"
+msgstr "JSON 格式错误"
+
+msgid "Not saved — invalid JSON"
+msgstr "未保存 — JSON 格式错误"
+
+msgid "Saved."
+msgstr "已保存。"
+
+msgid "Saved and service restarted."
+msgstr "已保存并重启服务。"
+
+msgid "Configuration saved and KixDNS restarted."
+msgstr "配置已保存，KixDNS 已重启。"
+
+msgid "Save failed"
+msgstr "保存失败"
+
+msgid "Validate"
+msgstr "校验"
+
+msgid "Format"
+msgstr "格式化"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Save & Apply"
+msgstr "保存并应用"
+
+msgid "KixDNS - Log"
+msgstr "KixDNS - 日志"
+
+msgid "Filter (domain, IP, rule ...)"
+msgstr "过滤（域名、IP、规则…）"
+
+msgid "Rule"
+msgstr "规则"
+
+msgid "All rules"
+msgstr "全部规则"
+
+msgid "Lines"
+msgstr "行数"
+
+msgid "All"
+msgstr "全部"
+
+msgid "Auto refresh"
+msgstr "自动刷新"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "%d shown / %d matched"
+msgstr "显示 %d 条 / 匹配 %d 条"
+
+msgid "No log entries match the current filters."
+msgstr "没有日志匹配当前过滤条件。"
+
+msgid "No log entries in %s."
+msgstr "%s 中暂无日志。"
+
+msgid "Listening (from pipeline config)"
+msgstr "监听地址（读取自 pipeline 配置）"
+
+msgid "Log size limit (KB)"
+msgstr "日志大小限制（KB）"
+
+msgid ""
+"When the log file exceeds this size on service start, it is cleared before "
+"new entries are written."
+msgstr "服务启动时若日志文件超过此大小，将先清空再写入新日志。"
+
+msgid "Clear log"
+msgstr "清空日志"
+
+msgid ""
+"Log file: %s (cleared on service start if oversized, kept out of the system "
+"log)."
+msgstr "日志文件：%s（服务启动时若文件超限则清空，不写入系统日志）。"
