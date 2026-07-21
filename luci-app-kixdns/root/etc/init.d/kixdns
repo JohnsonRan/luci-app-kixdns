@@ -3,9 +3,10 @@
 START=95
 STOP=10
 USE_PROCD=1
-EXTRA_COMMANDS="update_config install_config"
+EXTRA_COMMANDS="update_config install_config clear_log"
 EXTRA_HELP="\tupdate_config [URL]\tDownload and install a remote pipeline configuration
-\tinstall_config\t\tValidate and install the staged local pipeline configuration"
+\tinstall_config\t\tValidate and install the staged local pipeline configuration
+\tclear_log\t\tClear the log file if it exceeds the configured size limit"
 
 PROG=/usr/bin/kixdns
 NFT_TABLE=kixdns
@@ -13,6 +14,9 @@ NFT_TABLE=kixdns
 CONFFILE=/etc/kixdns/pipeline.json
 STAGED_CONFIG=/etc/kixdns/pipeline.json.new
 GEOIPFILE=/etc/kixdns/geoip.dat
+LOGFILE=/tmp/kixdns.log
+CRONTAB=/etc/crontabs/root
+CRONTAG="#kixdns log_size clear"
 
 flush_hijack() {
 	nft delete table inet "$NFT_TABLE" 2>/dev/null
@@ -148,6 +152,27 @@ install_config() {
 	install_pipeline_file "$STAGED_CONFIG"
 }
 
+clear_log() {
+	local log_size
+
+	config_load kixdns
+	config_get log_size main log_size 1024
+	clear_oversized_log "$LOGFILE" "$log_size"
+}
+
+schedule_log_clear() {
+	mkdir -p "${CRONTAB%/*}"
+	touch "$CRONTAB"
+	sed -i "\\|$CRONTAG|d" "$CRONTAB"
+	echo "*/5 * * * * /etc/init.d/kixdns clear_log $CRONTAG" >> "$CRONTAB"
+	/etc/init.d/cron restart 2>/dev/null
+}
+
+unschedule_log_clear() {
+	[ -f "$CRONTAB" ] && sed -i "\\|$CRONTAG|d" "$CRONTAB"
+	/etc/init.d/cron restart 2>/dev/null
+}
+
 update_config() {
 	local url="${1:-}" tmp
 
@@ -199,7 +224,7 @@ start_service() {
 	config_get geoip_download_url main geoip_download_url ''
 	config_get_bool debug main debug 0
 	config_get rust_log main rust_log 'error,kixdns::engine::matcher_adapter=info'
-	log_file=/tmp/kixdns.log
+	log_file="$LOGFILE"
 	config_get log_size main log_size 1024
 
 	[ -f "$CONFFILE" ] || {
@@ -209,6 +234,7 @@ start_service() {
 
 	mkdir -p "${log_file%/*}"
 	clear_oversized_log "$log_file" "$log_size"
+	schedule_log_clear
 	download_geoip "$geoip_download_url" || true
 
 	procd_open_instance kixdns
@@ -228,6 +254,7 @@ start_service() {
 
 stop_service() {
 	flush_hijack
+	unschedule_log_clear
 }
 
 reload_service() {

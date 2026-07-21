@@ -162,7 +162,7 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.option(form.Value, 'log_size', _('Log size limit (KB)'),
-			_('When the log file exceeds this size on service start, it is cleared before new entries are written.'));
+			_('When the log file exceeds this size, it is cleared. Checked on service start and every 5 minutes while running.'));
 		o.datatype = 'uinteger';
 		o.default = '1024';
 		o.placeholder = '1024';
