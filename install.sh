@@ -19,12 +19,24 @@ fi
 
 case "$DISTRIB_ARCH" in
 	x86_64*) arch=x86_64 ;;
+	aarch64_cortex-a53) arch=aarch64_cortex-a53 ;;
 	aarch64*) arch=aarch64_generic ;;
 	*)
-		echo "unsupported architecture: $DISTRIB_ARCH (only x86_64 and aarch64_generic prebuilt packages are provided)" >&2
+		echo "unsupported architecture: $DISTRIB_ARCH (only x86_64, aarch64_generic and aarch64_cortex-a53 prebuilt packages are provided)" >&2
 		exit 1
 		;;
 esac
+
+if command -v curl >/dev/null 2>&1; then
+	fetch() { curl -fsSL -o "$1" "$2"; }
+elif command -v uclient-fetch >/dev/null 2>&1; then
+	fetch() { uclient-fetch -q -O "$1" "$2"; }
+elif command -v wget >/dev/null 2>&1; then
+	fetch() { wget -q -O "$1" "$2"; }
+else
+	echo "no download tool found (need curl, uclient-fetch or wget)" >&2
+	exit 1
+fi
 
 asset="kixdns_${arch}-openwrt-25.12.tar.gz"
 url="https://github.com/$REPO/releases/latest/download/$asset"
@@ -33,20 +45,15 @@ tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT INT TERM
 
 echo "downloading $asset..."
-wget -O "$tmpdir/$asset" "$url"
+if ! fetch "$tmpdir/$asset" "$url"; then
+	echo "failed to download $asset" >&2
+	echo "no prebuilt package available for architecture: $arch" >&2
+	exit 1
+fi
 
 tar -xzf "$tmpdir/$asset" -C "$tmpdir"
 
 echo "installing packages..."
 apk add --allow-untrusted "$tmpdir"/*.apk
 
-cat <<-'EOF'
-
-	installed. Enable and start the service with:
-	  uci set kixdns.main.enabled=1
-	  uci commit kixdns
-	  /etc/init.d/kixdns enable
-	  /etc/init.d/kixdns start
-
-	Then configure it under LuCI: Services > KixDNS
-EOF
+echo "installed. Configure it under LuCI: Services > KixDNS"
