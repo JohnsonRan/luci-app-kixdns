@@ -57,10 +57,96 @@
         body { overflow: hidden; background-color: var(--editor-canvas); color: var(--editor-text); -webkit-font-smoothing: antialiased; }
         button, input, select, textarea { touch-action: manipulation; }
         .editor-pane { --editor-pane-gutter: 1.5rem; container: editor-pane / inline-size; height: 100vh; overflow-y: auto; background: var(--editor-canvas); border-right: 1px solid var(--editor-border); scrollbar-color: var(--editor-border) transparent; }
-        .preview-pane { display: flex; height: 100vh; min-height: 0; flex-direction: column; background-color: var(--editor-json); color: #f0f0f0; }
-        .preview-pane textarea { min-height: 20rem; flex: 1; resize: none; background: var(--editor-json-field) !important; color: #f0f0f0 !important; }
-        .mobile-pane-tabs { height: 52px; padding: 6px; background: var(--editor-surface); border-bottom: 1px solid var(--editor-border); }
-        .mobile-pane-tabs .btn { min-height: 40px; }
+        .preview-pane { display: flex; height: 100vh; min-height: 0; flex-direction: column; background-color: var(--editor-json); color: #dfe3e8; }
+        .json-pane-header {
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: .5rem;
+            padding: .5rem .75rem;
+            background: var(--editor-json-field);
+            border-bottom: 1px solid rgba(255, 255, 255, .08);
+        }
+        .json-pane-title { font-size: .88rem; font-weight: 600; white-space: nowrap; }
+        .json-pane-badge {
+            padding: .08rem .45rem;
+            font-size: .68rem;
+            color: #ffc107;
+            background: rgba(255, 193, 7, .14);
+            border: 1px solid rgba(255, 193, 7, .4);
+            border-radius: .7rem;
+            white-space: nowrap;
+        }
+        .json-pane-actions { display: flex; gap: .35rem; margin-left: auto; }
+        .json-pane-actions .btn { padding: .18rem .55rem; font-size: .78rem; }
+        .json-editor-wrap { display: flex; flex: 1 1 auto; min-height: 0; }
+        .json-gutter {
+            flex: 0 0 auto;
+            overflow: hidden;
+            padding: .75rem 0;
+            color: #5c6875;
+            background: var(--editor-json-field);
+            border-right: 1px solid rgba(255, 255, 255, .07);
+            font-family: SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            text-align: right;
+            user-select: none;
+        }
+        .json-gutter-inner { padding-right: .7rem; white-space: pre; will-change: transform; }
+        .json-code-area { position: relative; flex: 1 1 auto; min-width: 0; }
+        .json-highlight { position: absolute; inset: 0; margin: 0; overflow: hidden; pointer-events: none; }
+        .json-highlight-code {
+            display: inline-block;
+            min-width: 100%;
+            padding: .75rem;
+            color: #dfe3e8;
+            font-family: SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre;
+            will-change: transform;
+        }
+        .json-input {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            padding: .75rem;
+            overflow: auto;
+            resize: none;
+            background: transparent !important;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none !important;
+            color: transparent !important;
+            caret-color: #e7eaee;
+            font-family: SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre;
+            scrollbar-color: rgba(255, 255, 255, .22) transparent;
+        }
+        .json-input:focus { outline: none; }
+        .json-input::selection { background: rgba(76, 141, 255, .4); color: transparent; }
+        .json-input::placeholder { color: rgba(255, 255, 255, .28); }
+        .json-statusbar {
+            display: flex;
+            flex: 0 0 auto;
+            align-items: center;
+            gap: .75rem;
+            padding: .32rem .75rem;
+            font-size: .74rem;
+            color: #9aa5b1;
+            background: var(--editor-json-field);
+            border-top: 1px solid rgba(255, 255, 255, .08);
+        }
+        .json-statusbar .json-status-error { color: #ff7b72; }
+        .json-statusbar .json-status-ok { color: #7ee787; }
+        .jt-key { color: #82b1ff; }
+        .jt-str { color: #9ccc65; }
+        .jt-num { color: #f2a570; }
+        .jt-kw { color: #c792ea; }
         .editor-sticky-controls {
             position: sticky;
             top: calc(-1 * var(--editor-pane-gutter));
@@ -151,21 +237,18 @@
             .row > .col-md-6,
             .row > .col-md-8 { width: 100%; }
         }
-        @media (max-width: 1199.98px) {
-            .mobile-pane-tabs { display: block !important; }
-            .mobile-hidden { display: none !important; }
-            .editor-pane, .preview-pane {
-                width: 100% !important;
-                height: calc(100vh - 52px);
-                border-right: 0;
-            }
-        }
         @media (max-width: 767.98px) {
-            .editor-pane { --editor-pane-gutter: 1rem; padding: 1rem !important; }
-            .preview-pane { padding: 1rem !important; }
+            .editor-pane {
+                --editor-pane-gutter: 1rem;
+                height: 50vh;
+                padding: 1rem !important;
+                border-right: 0;
+                border-bottom: 1px solid var(--editor-border);
+            }
+            .preview-pane { height: 50vh; }
             .editor-pane h2 { margin-bottom: 1rem !important; font-size: 1.35rem; }
             .editor-sticky-controls { padding-top: .6rem; }
-            .preview-pane textarea { min-height: 0; }
+            .json-pane-title { display: none; }
         }
         @media (prefers-reduced-motion: reduce) {
             .outline-target-flash { animation-duration: .8s; animation-timing-function: steps(1, end); }
@@ -174,15 +257,9 @@
 </head>
 <body>
     <div id="app" class="container-fluid">
-        <div class="mobile-pane-tabs d-md-none">
-            <div class="btn-group w-100" role="group" aria-label="编辑器视图">
-                <button type="button" class="btn" :class="mobilePane === 'editor' ? 'btn-primary' : 'btn-outline-secondary'" @click="mobilePane = 'editor'">结构化编辑</button>
-                <button type="button" class="btn" :class="mobilePane === 'json' ? 'btn-primary' : 'btn-outline-secondary'" @click="mobilePane = 'json'">JSON 配置</button>
-            </div>
-        </div>
         <div class="row g-0">
             <!-- Editor Pane -->
-            <div ref="editorPaneRef" class="col-md-7 editor-pane p-4" :class="{ 'mobile-hidden': mobilePane !== 'editor' }" @scroll="onEditorScroll">
+            <div ref="editorPaneRef" class="col-md-7 editor-pane p-4" @scroll="onEditorScroll">
                 <h2 class="mb-4">KixDNS 配置编辑器</h2>
 
                 <div ref="stickyControlsRef" class="editor-sticky-controls">
@@ -657,18 +734,41 @@
             </div>
 
             <!-- Preview Pane -->
-            <div class="col-md-5 preview-pane p-4" :class="{ 'mobile-hidden': mobilePane !== 'json' }">
-                <div class="mb-3 d-flex align-items-center justify-content-between gap-2">
-                    <h4 class="mb-0">JSON 预览 / 编辑</h4>
-                    <button type="button" class="btn btn-sm btn-outline-light" :disabled="busy" @click="loadJson">应用到编辑器</button>
+            <div class="col-md-5 preview-pane">
+                <div class="json-pane-header">
+                    <span class="json-pane-title">JSON 配置</span>
+                    <span v-if="manualJsonEdit" class="json-pane-badge">未应用</span>
+                    <div class="json-pane-actions">
+                        <button type="button" class="btn btn-outline-light" :disabled="busy || !jsonStatus.valid" title="格式化 JSON" @click="formatJson">格式化</button>
+                        <button type="button" class="btn btn-outline-light" title="复制到剪贴板" @click="copyJson">复制</button>
+                        <button type="button" class="btn btn-outline-warning" :disabled="busy" title="将 JSON 同步到左侧结构化编辑器" @click="loadJson">应用到编辑器</button>
+                    </div>
                 </div>
-                <textarea class="form-control font-monospace bg-dark text-light border-secondary"
-                    style="font-size: 12px; line-height: 1.5;"
-                    v-model="rawJson"
-                    spellcheck="false"
-                    aria-label="JSON 配置"
-                    @input="onRawJsonInput"></textarea>
-                <div class="small text-light opacity-75 mt-2">修改后先应用到编辑器，再保存/保存并应用。</div>
+                <div class="json-editor-wrap">
+                    <div class="json-gutter" aria-hidden="true">
+                        <div ref="jsonGutterInnerRef" class="json-gutter-inner" v-text="jsonLineNumbers"></div>
+                    </div>
+                    <div class="json-code-area">
+                        <pre class="json-highlight" aria-hidden="true"><code ref="jsonHighlightCodeRef" class="json-highlight-code" v-html="highlightedJson"></code></pre>
+                        <textarea ref="jsonTextareaRef" class="json-input"
+                            v-model="rawJson"
+                            spellcheck="false"
+                            autocapitalize="off"
+                            autocomplete="off"
+                            autocorrect="off"
+                            wrap="off"
+                            aria-label="JSON 配置"
+                            placeholder="在此编辑 JSON 配置..."
+                            @input="onRawJsonInput"
+                            @scroll="onJsonScroll"
+                            @keydown="onJsonKeydown"></textarea>
+                    </div>
+                </div>
+                <div class="json-statusbar">
+                    <span v-if="jsonStatus.valid" class="json-status-ok">✓ JSON 有效</span>
+                    <span v-else class="json-status-error" :title="jsonStatus.error">✗ {{ jsonStatus.error }}</span>
+                    <span class="ms-auto text-nowrap">{{ jsonLineCount }} 行 · {{ rawJson.length }} 字符</span>
+                </div>
             </div>
         </div>
     </div>
@@ -1143,10 +1243,12 @@
                 const bridgeStatusClass = ref('text-secondary');
                 const busy = ref(true);
                 const dirty = ref(false);
-                const mobilePane = ref('editor');
                 const editorPaneRef = ref(null);
                 const stickyControlsRef = ref(null);
                 const outlineRef = ref(null);
+                const jsonTextareaRef = ref(null);
+                const jsonGutterInnerRef = ref(null);
+                const jsonHighlightCodeRef = ref(null);
                 const activeOutlineKey = ref('settings');
                 const activePipelineIndex = ref(-1);
                 let outlineScrollFrame = 0;
@@ -1456,6 +1558,105 @@
                     manualJsonEdit.value = true;
                     dirty.value = true;
                     setBridgeStatus('JSON 已修改，应用后可同步左侧', 'warning');
+                };
+
+                // --- JSON 编辑增强：语法高亮 / 行号 / 状态栏 ---
+                const escapeJsonHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+                const highlightJsonHtml = (src) => {
+                    if (!src) return '';
+                    let html = escapeJsonHtml(src).replace(
+                        /("(?:[^"\\\n]|\\.)*")(\s*:)?|(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)|\b(true|false|null)\b/g,
+                        (m, str, colon, num, kw) => {
+                            if (str !== undefined) {
+                                return colon
+                                    ? '<span class="jt-key">' + str + '</span>' + colon
+                                    : '<span class="jt-str">' + str + '</span>';
+                            }
+                            if (num !== undefined) return '<span class="jt-num">' + num + '</span>';
+                            if (kw !== undefined) return '<span class="jt-kw">' + kw + '</span>';
+                            return m;
+                        }
+                    );
+                    // 保持末尾空行高度与 textarea 一致
+                    if (src.endsWith('\n')) html += ' ';
+                    return html;
+                };
+
+                const highlightedJson = computed(() => highlightJsonHtml(rawJson.value));
+
+                const jsonLineCount = computed(() => rawJson.value.split('\n').length);
+
+                const jsonLineNumbers = computed(() => {
+                    const count = jsonLineCount.value;
+                    const parts = new Array(count);
+                    for (let i = 1; i <= count; i++) parts[i - 1] = i;
+                    return parts.join('\n') + '\n';
+                });
+
+                const jsonStatus = computed(() => {
+                    const src = rawJson.value;
+                    if (!src.trim()) return { valid: false, error: '内容为空' };
+                    try {
+                        JSON.parse(src);
+                        return { valid: true, error: '' };
+                    } catch (e) {
+                        return { valid: false, error: e.message || '解析失败' };
+                    }
+                });
+
+                const onJsonScroll = () => {
+                    const ta = jsonTextareaRef.value;
+                    if (!ta) return;
+                    if (jsonHighlightCodeRef.value) {
+                        jsonHighlightCodeRef.value.style.transform = `translate(${-ta.scrollLeft}px, ${-ta.scrollTop}px)`;
+                    }
+                    if (jsonGutterInnerRef.value) {
+                        jsonGutterInnerRef.value.style.transform = `translateY(${-ta.scrollTop}px)`;
+                    }
+                };
+
+                const onJsonKeydown = (e) => {
+                    if (e.key !== 'Tab' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+                    e.preventDefault();
+                    const ta = e.target;
+                    const start = ta.selectionStart;
+                    const end = ta.selectionEnd;
+                    rawJson.value = rawJson.value.slice(0, start) + '  ' + rawJson.value.slice(end);
+                    onRawJsonInput();
+                    nextTick(() => {
+                        ta.selectionStart = ta.selectionEnd = start + 2;
+                        onJsonScroll();
+                    });
+                };
+
+                const formatJson = () => {
+                    try {
+                        const parsed = JSON.parse(rawJson.value);
+                        rawJson.value = JSON.stringify(parsed, null, 2);
+                        onRawJsonInput();
+                        nextTick(onJsonScroll);
+                    } catch (e) {
+                        setBridgeStatus('JSON 解析失败，无法格式化: ' + e.message, 'danger');
+                    }
+                };
+
+                const copyJson = async () => {
+                    try {
+                        if (navigator.clipboard && window.isSecureContext) {
+                            await navigator.clipboard.writeText(rawJson.value);
+                        } else {
+                            const ta = jsonTextareaRef.value;
+                            if (!ta) throw new Error('textarea 不可用');
+                            ta.focus();
+                            ta.select();
+                            document.execCommand('copy');
+                            ta.setSelectionRange(0, 0);
+                        }
+                        setBridgeStatus('已复制到剪贴板', 'success');
+                    } catch (e) {
+                        setBridgeStatus('复制失败: ' + (e.message || e), 'danger');
+                    }
                 };
 
                 const postBridgeMessage = (type, payload = {}) => {
@@ -1904,7 +2105,6 @@
                     }
                     programmaticOutlineKey = item.key;
                     currentTab.value = 'editor';
-                    mobilePane.value = 'editor';
                     activeOutlineKey.value = item.key;
                     if (item.kind === 'pipeline') {
                         activePipelineIndex.value = activePipelineIndex.value === item.pipelineIndex ? -1 : item.pipelineIndex;
@@ -2107,8 +2307,11 @@
 
                 return {
                     config, rawJson, manualJsonEdit, geositePaths, geoipFilterCountriesString, geositeEnabled,
-                    bridgeStatus, bridgeStatusClass, busy, mobilePane,
+                    bridgeStatus, bridgeStatusClass, busy,
                     editorPaneRef, stickyControlsRef, outlineRef, outlineItems, activeOutlineKey,
+                    jsonTextareaRef, jsonGutterInnerRef, jsonHighlightCodeRef,
+                    highlightedJson, jsonLineNumbers, jsonLineCount, jsonStatus,
+                    onJsonScroll, onJsonKeydown, formatJson, copyJson,
                     selectorMatcherTypes, requestMatcherTypes, responseMatcherTypes,
                     loadJson, onRawJsonInput, requestLoad, requestSave,
                     addPipelineSelect, removePipelineSelect,
