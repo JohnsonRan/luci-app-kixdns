@@ -28,7 +28,8 @@ jobs:
           persist-credentials: false
 
       - name: Build packages
-        uses: openwrt/gh-action-sdk@main
+        # this fork enabled download-ci-llvm
+        uses: sbwml/openwrt-gh-action-sdk@go1.26
         env:
           ARCH: ${{ matrix.arch }}-openwrt-25.12
           FEEDNAME: kixdns
