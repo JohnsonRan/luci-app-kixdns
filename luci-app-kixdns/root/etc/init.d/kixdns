@@ -163,6 +163,7 @@ clear_log() {
 schedule_log_clear() {
 	mkdir -p "${CRONTAB%/*}"
 	touch "$CRONTAB"
+	grep -qF "$CRONTAG" "$CRONTAB" && return 0
 	sed -i "\\|$CRONTAG|d" "$CRONTAB"
 	echo "*/5 * * * * /etc/init.d/kixdns clear_log $CRONTAG" >> "$CRONTAB"
 	/etc/init.d/cron restart 2>/dev/null

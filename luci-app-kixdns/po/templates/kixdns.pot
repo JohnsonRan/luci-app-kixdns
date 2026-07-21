@@ -228,9 +228,7 @@ msgstr ""
 msgid "Log size limit (KB)"
 msgstr ""
 
-msgid ""
-"When the log file exceeds this size on service start, it is cleared before "
-"new entries are written."
+msgid "When the log file exceeds this size, it is cleared."
 msgstr ""
 
 msgid "Clear log"

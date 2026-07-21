@@ -242,10 +242,8 @@ msgstr "监听地址（读取自 pipeline 配置）"
 msgid "Log size limit (KB)"
 msgstr "日志大小限制（KB）"
 
-msgid ""
-"When the log file exceeds this size on service start, it is cleared before "
-"new entries are written."
-msgstr "服务启动时若日志文件超过此大小，将先清空再写入新日志。"
+msgid "When the log file exceeds this size, it is cleared."
+msgstr "日志文件超过此大小时将被清空。"
 
 msgid "Clear log"
 msgstr "清空日志"

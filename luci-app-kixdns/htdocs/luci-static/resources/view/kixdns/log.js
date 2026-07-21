@@ -23,9 +23,7 @@ var css = '\
 .kx-lvl-error { color:#f85149; font-weight:bold; } \
 .kx-lvl-debug { color:#8b949e; }';
 
-function getLogFile() {
-	return '/tmp/kixdns.log';
-}
+var LOGFILE = '/tmp/kixdns.log';
 
 function fetchLog() {
 	return L.resolveDefault(
@@ -168,7 +166,7 @@ return view.extend({
 			}
 			else {
 				logNode.innerHTML = '<span class="kx-syslog">' +
-					_('No log entries in %s.').format(escapeHTML(getLogFile())) +
+					_('No log entries in %s.').format(escapeHTML(LOGFILE)) +
 					'</span>';
 			}
 
@@ -188,7 +186,7 @@ return view.extend({
 		}
 
 		function clearLog() {
-			return fs.write(getLogFile(), '')
+			return fs.write(LOGFILE, '')
 				.then(refresh)
 				.catch(function (e) { ui.addNotification(null, E('p', e.message), 'error'); });
 		}
@@ -212,7 +210,7 @@ return view.extend({
 			E('style', {}, css),
 			E('h2', {}, _('KixDNS - Log')),
 			E('div', { 'class': 'cbi-map-descr' },
-				_('Log file: %s (cleared on service start if oversized, kept out of the system log).').format('<code>' + escapeHTML(getLogFile()) + '</code>')),
+				_('Log file: %s (cleared on service start if oversized, kept out of the system log).').format('<code>' + escapeHTML(LOGFILE) + '</code>')),
 			E('div', { 'class': 'cbi-section' }, [
 				E('div', { 'style': 'display:flex;align-items:center;gap:.75em;flex-wrap:wrap;margin-bottom:.5em' }, [
 					filterInput,
