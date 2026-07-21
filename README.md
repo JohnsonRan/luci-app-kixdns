@@ -20,6 +20,16 @@ kixdns/            KixDNS core package
 luci-app-kixdns/   LuCI application
 ```
 
+## Install
+
+One-click install on OpenWrt (25.12, `x86_64` or `aarch64_generic`, apk-based):
+
+```sh
+wget -O - https://raw.githubusercontent.com/JohnsonRan/luci-app-kixdns/main/install.sh | sh
+```
+
+This downloads the latest [release](https://github.com/JohnsonRan/luci-app-kixdns/releases/latest) for your architecture and installs it with `apk`. For other targets, build from source below.
+
 ## Building
 
 Place this repository under the OpenWrt `package/` tree, for example `package/kixdns-feed`, or add it as a custom feed.
