@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KixDNS 配置编辑器</title>
+    <script>(function(){var p=new URLSearchParams(location.search).get('theme');var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.classList.toggle('dark',d)})();</script>
     <link href="vendor/bootstrap-5.3.0.min.css" rel="stylesheet">
     <script src="vendor/vue-3.5.40.global.prod.js"></script>
     <script src="vendor/mermaid-11.16.0.min.js"></script>
@@ -22,8 +23,11 @@
             --editor-close-filter: none;
             --editor-accent-soft: #e7f1ff;
             --editor-sticky-shadow: rgba(24, 33, 43, .12);
+            --editor-status-success: #1a7f37;
+            --editor-status-danger: #cf222e;
+            --editor-status-warning: #9a6700;
         }
-        body.theme-dark {
+        :root.dark {
             color-scheme: dark;
             --editor-canvas: #111417;
             --editor-surface: #1b1f23;
@@ -36,22 +40,9 @@
             --editor-close-filter: invert(1) grayscale(100%) brightness(180%);
             --editor-accent-soft: #182a46;
             --editor-sticky-shadow: rgba(0, 0, 0, .42);
-        }
-        @media (prefers-color-scheme: dark) {
-            body:not(.theme-light) {
-                color-scheme: dark;
-                --editor-canvas: #111417;
-                --editor-surface: #1b1f23;
-                --editor-surface-raised: #252a30;
-                --editor-border: #3b424a;
-                --editor-text: #e7eaee;
-                --editor-muted: #aeb6bf;
-                --editor-json: #0d1013;
-                --editor-json-field: #15191d;
-                --editor-close-filter: invert(1) grayscale(100%) brightness(180%);
-                --editor-accent-soft: #182a46;
-                --editor-sticky-shadow: rgba(0, 0, 0, .42);
-            }
+            --editor-status-success: #7ee787;
+            --editor-status-danger: #ff7b72;
+            --editor-status-warning: #e3b341;
         }
         html, body, #app { height: 100%; margin: 0; }
         body { overflow: hidden; background-color: var(--editor-canvas); color: var(--editor-text); -webkit-font-smoothing: antialiased; }
@@ -160,7 +151,8 @@
             border-bottom: 1px solid var(--editor-border);
             box-shadow: 0 .45rem 1rem var(--editor-sticky-shadow);
         }
-        .editor-toolbar { margin-bottom: .65rem; }
+        .editor-toolbar { gap: .75rem; margin-bottom: .65rem; }
+        .bridge-status { margin-inline-start: .4rem; }
         .editor-sticky-controls .nav-tabs { margin-bottom: .6rem; }
         .editor-outline-shell { min-width: 0; }
         .editor-outline {
@@ -220,6 +212,9 @@
         .form-control::placeholder { color: var(--editor-muted); opacity: 1; }
         .form-control:focus, .form-select:focus { border-color: #4c8dff !important; box-shadow: 0 0 0 .2rem rgba(13,110,253,.2); }
         .form-text, .text-muted, .text-secondary { color: var(--editor-muted) !important; }
+        .text-success { color: var(--editor-status-success) !important; }
+        .text-danger { color: var(--editor-status-danger) !important; }
+        .text-warning { color: var(--editor-status-warning) !important; }
         .nav-tabs { border-color: var(--editor-border); }
         .nav-tabs .nav-link { color: #4c8dff; }
         .nav-tabs .nav-link.active { background: var(--editor-surface); color: var(--editor-text); border-color: var(--editor-border) var(--editor-border) var(--editor-surface); }
@@ -269,11 +264,11 @@
 
                 <div ref="stickyControlsRef" class="editor-sticky-controls">
                     <!-- Toolbar -->
-                    <div class="editor-toolbar d-flex flex-wrap align-items-center gap-2">
+                    <div class="editor-toolbar d-flex flex-wrap align-items-center">
                         <button type="button" class="btn btn-outline-secondary" :disabled="busy" @click="requestLoad">重新读取</button>
                         <button type="button" class="btn btn-primary" :disabled="busy" @click="requestSave(false)">保存</button>
                         <button type="button" class="btn btn-success" :disabled="busy" @click="requestSave(true)">保存并应用</button>
-                        <span class="small ms-md-2" :class="bridgeStatusClass" role="status">{{ bridgeStatus }}</span>
+                        <span class="small bridge-status" :class="bridgeStatusClass" role="status">{{ bridgeStatus }}</span>
                     </div>
 
                     <ul class="nav nav-tabs">
@@ -1261,9 +1256,7 @@
                 let programmaticOutlineKey = null;
                 let pendingSaveContent = null;
                 let syncingFromParent = false;
-                const themeParam = new URLSearchParams(window.location.search).get('theme');
-                let darkTheme = themeParam === 'dark' ||
-                    (themeParam !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                let darkTheme = document.documentElement.classList.contains('dark');
                 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
                 const outlineItems = computed(() => {
@@ -1295,9 +1288,6 @@
 
                     return items;
                 });
-
-                document.body.classList.toggle('theme-dark', darkTheme);
-                document.body.classList.toggle('theme-light', !darkTheme);
 
                 // Definitions
                 const selectorMatcherTypes = {
@@ -1502,8 +1492,7 @@
 
                 const setEditorTheme = (dark) => {
                     darkTheme = dark === true;
-                    document.body.classList.toggle('theme-dark', darkTheme);
-                    document.body.classList.toggle('theme-light', !darkTheme);
+                    document.documentElement.classList.toggle('dark', darkTheme);
                     mermaid.initialize({
                         startOnLoad: false,
                         securityLevel: 'strict',
@@ -1980,28 +1969,26 @@
                 const mermaidRef = ref(null);
 
                 const keepActiveOutlineVisible = () => {
-                    nextTick(() => {
-                        const nav = outlineRef.value;
-                        if (!nav) return;
-                        const button = Array.from(nav.querySelectorAll('[data-outline-button]'))
-                            .find(el => el.dataset.outlineButton === activeOutlineKey.value);
-                        if (!button) return;
+                    const nav = outlineRef.value;
+                    if (!nav) return;
+                    const button = Array.from(nav.querySelectorAll('[data-outline-button]'))
+                        .find(el => el.dataset.outlineButton === activeOutlineKey.value);
+                    if (!button) return;
 
-                        const navRect = nav.getBoundingClientRect();
-                        const buttonRect = button.getBoundingClientRect();
-                        let delta = 0;
-                        if (buttonRect.left < navRect.left + 4) {
-                            delta = buttonRect.left - navRect.left - 8;
-                        } else if (buttonRect.right > navRect.right - 4) {
-                            delta = buttonRect.right - navRect.right + 8;
-                        }
-                        if (delta) {
-                            nav.scrollTo({
-                                left: nav.scrollLeft + delta,
-                                behavior: prefersReducedMotion ? 'auto' : 'smooth'
-                            });
-                        }
-                    });
+                    const navRect = nav.getBoundingClientRect();
+                    const buttonRect = button.getBoundingClientRect();
+                    let delta = 0;
+                    if (buttonRect.left < navRect.left + 4) {
+                        delta = buttonRect.left - navRect.left - 8;
+                    } else if (buttonRect.right > navRect.right - 4) {
+                        delta = buttonRect.right - navRect.right + 8;
+                    }
+                    if (delta) {
+                        nav.scrollTo({
+                            left: nav.scrollLeft + delta,
+                            behavior: prefersReducedMotion ? 'auto' : 'smooth'
+                        });
+                    }
                 };
 
                 const syncOutlineFromScroll = () => {
@@ -2057,44 +2044,11 @@
                     }, { once: true });
                 };
 
-                const waitForScrollSettle = (pane, destination, callback) => {
-                    let cancelled = false;
-                    let frameId = 0;
-
-                    if ('onscrollend' in pane) {
-                        const onScrollEnd = () => {
-                            if (!cancelled) callback();
-                        };
-                        pane.addEventListener('scrollend', onScrollEnd, { once: true });
-                        return () => {
-                            cancelled = true;
-                            pane.removeEventListener('scrollend', onScrollEnd);
-                        };
-                    }
-
-                    let lastTop = pane.scrollTop;
-                    let moved = false;
-                    let idleSince = window.performance.now();
-                    const checkPosition = (now) => {
-                        if (cancelled) return;
-                        const currentTop = pane.scrollTop;
-                        if (Math.abs(currentTop - lastTop) > .5) {
-                            moved = true;
-                            lastTop = currentTop;
-                            idleSince = now;
-                        }
-                        const arrived = Math.abs(currentTop - destination) <= 1;
-                        if (arrived || (moved && now - idleSince >= 120)) {
-                            callback();
-                            return;
-                        }
-                        frameId = window.requestAnimationFrame(checkPosition);
-                    };
-                    frameId = window.requestAnimationFrame(checkPosition);
-                    return () => {
-                        cancelled = true;
-                        if (frameId) window.cancelAnimationFrame(frameId);
-                    };
+                const waitForScrollSettle = (pane, _destination, callback) => {
+                    let timer = setTimeout(callback, 350);
+                    const onEnd = () => { clearTimeout(timer); callback(); };
+                    pane.addEventListener('scrollend', onEnd, { once: true });
+                    return () => { clearTimeout(timer); pane.removeEventListener('scrollend', onEnd); };
                 };
 
                 const showEditor = async () => {

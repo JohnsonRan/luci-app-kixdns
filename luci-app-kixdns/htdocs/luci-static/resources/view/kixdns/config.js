@@ -34,7 +34,7 @@ return view.extend({
 		var operationPending = false;
 		var frame = E('iframe', {
 			'class': 'kixdns-config-editor-frame',
-			'src': L.resource('kixdns/config_editor.html') + '?v=1.4.8',
+			'src': L.resource('kixdns/config_editor.html') + '?v=1.4.9',
 			'title': _('KixDNS configuration editor')
 		});
 
@@ -132,6 +132,10 @@ return view.extend({
 
 		return E('div', { 'class': 'cbi-map' }, [
 			E('style', {}, [
+				/* The bootstrap theme caps #maincontent (.container) at 1180px, which makes the
+				   dual-pane editor feel cramped. This style element only exists while this view
+				   is rendered, so lifting the cap here does not affect other pages. */
+				'#maincontent.container{max-width:1460px}' +
 				'.kixdns-config-editor-frame{display:block;width:100%;height:calc(100vh - 150px);' +
 				'min-height:720px;border:1px solid #d6dce3;border-radius:4px;background:#f8f9fa}' +
 				'@media(max-width:767px){.kixdns-config-editor-frame{height:calc(100vh - 120px);min-height:640px}}'
