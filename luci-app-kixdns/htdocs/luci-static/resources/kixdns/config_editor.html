@@ -239,6 +239,24 @@
                                 <input type="text" class="form-control" v-model="config.settings.bind_tcp">
                             </div>
                             <div class="col-md-6">
+                                <label class="form-label">DoH 监听地址</label>
+                                <input type="text" class="form-control" v-model="config.settings.bind_doh" placeholder="留空则不启用 DoH">
+                                <div class="form-text small">如 0.0.0.0:443，留空则不启用 DoH 入站 (RFC 8484)</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">DoH TLS 证书路径</label>
+                                <input type="text" class="form-control" v-model="config.settings.doh_tls_cert" placeholder="如 /path/to/cert.pem">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">DoH TLS 私钥路径</label>
+                                <input type="text" class="form-control" v-model="config.settings.doh_tls_key" placeholder="如 /path/to/key.pem">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">DoH 查询路径</label>
+                                <input type="text" class="form-control" v-model="config.settings.doh_path" placeholder="/dns-query">
+                                <div class="form-text small">自定义查询路径可避免探测，如 /s/xxxxx（默认 /dns-query）</div>
+                            </div>
+                            <div class="col-md-6">
                                 <label class="form-label">默认上游</label>
                                 <input type="text" class="form-control" v-model="config.settings.default_upstream">
                             </div>
@@ -538,6 +556,63 @@
                                             </div>
                                         </div>
 
+                                        <!-- Pipeline ECS 配置卡（缓存隔离维度）RFC 7871 -->
+                                        <div class="mb-3">
+                                            <div class="card border-info">
+                                                <div class="card-header bg-info text-white py-1 d-flex justify-content-between align-items-center">
+                                                    <span class="fw-bold small">Pipeline ECS（缓存隔离）RFC 7871</span>
+                                                    <span class="badge bg-light text-dark" v-if="hasEcsAction(pipe)">⚠ Action 级 ECS 已配置</span>
+                                                </div>
+                                                <div class="card-body py-2">
+                                                    <div class="d-flex gap-2 align-items-center mb-2">
+                                                        <label class="form-label small mb-0 text-nowrap">模式</label>
+                                                        <select class="form-select form-select-sm" style="max-width: 180px;"
+                                                                v-model="pipe.ecs_mode" @change="resetPipelineEcsFields(pipe)">
+                                                            <option value="">None（不隔离）</option>
+                                                            <option value="clear">Clear（剥离客户端 ECS）</option>
+                                                            <option value="from_client_ip">FromClientIp（按客户端 IP）</option>
+                                                            <option value="static">Static（固定子网）</option>
+                                                        </select>
+                                                    </div>
+                                                    <!-- FromClientIp 参数 -->
+                                                    <div class="row g-2" v-if="pipe.ecs_mode === 'from_client_ip'">
+                                                        <div class="col-md-3">
+                                                            <label class="form-label small">IPv4 前缀</label>
+                                                            <input type="number" class="form-control form-control-sm"
+                                                                   v-model.number="pipe.ecs_prefix_v4" min="0" max="32" placeholder="24">
+                                                        </div>
+                                                        <div class="col-md-3">
+                                                            <label class="form-label small">IPv6 前缀</label>
+                                                            <input type="number" class="form-control form-control-sm"
+                                                                   v-model.number="pipe.ecs_prefix_v6" min="0" max="128" placeholder="56">
+                                                        </div>
+                                                    </div>
+                                                    <!-- Static 参数 -->
+                                                    <div class="row g-2" v-if="pipe.ecs_mode === 'static'">
+                                                        <div class="col-md-4">
+                                                            <label class="form-label small">固定 IP</label>
+                                                            <input type="text" class="form-control form-control-sm"
+                                                                   v-model="pipe.ecs_ip" placeholder="1.2.3.0">
+                                                        </div>
+                                                        <div class="col-md-2">
+                                                            <label class="form-label small">前缀</label>
+                                                            <input type="number" class="form-control form-control-sm"
+                                                                   v-model.number="pipe.ecs_prefix" min="0" max="32" placeholder="24">
+                                                        </div>
+                                                    </div>
+                                                    <!-- 约束警告 -->
+                                                    <div class="form-text small text-danger"
+                                                         v-if="hasEcsAction(pipe) && !pipe.ecs_mode">
+                                                        ⚠ Pipeline 内有 Forward action 配置了 ECS，但 Pipeline 级未配置。
+                                                        缓存隔离可能不正确。建议设置 Pipeline 级 ECS 或拆分为独立 Pipeline。
+                                                    </div>
+                                                    <div class="form-text small text-muted">
+                                                        Pipeline 级 ECS 决定缓存隔离维度；Action 级 ECS 决定实际发包注入值。两者应保持一致。
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <h6 class="fw-bold">规则列表 (Rules)</h6>
                                         <div v-for="(rule, rIdx) in pipe.rules" :key="rIdx" class="card mb-3 shadow-sm" :data-outline-key="'rule-' + pIdx + '-' + rIdx">
                                             <div class="card-header d-flex justify-content-between align-items-center py-1">
@@ -705,25 +780,46 @@
                         <option value="dot">DoT</option>
                         <option value="doq">DoQ</option>
                     </select>
-                    <div class="form-text small" style="font-size: 11px;">支持协议前缀 (tcp://, udp://, doh://, dot://, doq://, https://, tls://, quic://) 以及逗号分隔的多个上游</div>
+                    <!-- ECS injection mode (RFC 7871) -->
+                    <select class="form-select" style="max-width: 150px;"
+                            v-model="a.ecs_mode" @change="resetForwardEcsFields(a)">
+                        <option value="">无 ECS</option>
+                        <option value="clear">ECS: Clear</option>
+                        <option value="from_client_ip">ECS: ClientIP</option>
+                        <option value="static">ECS: Static</option>
+                    </select>
+                    <!-- FromClientIp 参数（紧凑内联） -->
+                    <input v-if="a.ecs_mode === 'from_client_ip'" type="number"
+                           class="form-control" style="max-width: 70px;"
+                           v-model.number="a.ecs_prefix_v4" placeholder="24" min="0" max="32">
+                    <!-- Static 参数（紧凑内联） -->
+                    <input v-if="a.ecs_mode === 'static'" type="text"
+                           class="form-control" style="max-width: 100px;"
+                           v-model="a.ecs_ip" placeholder="1.2.3.0">
+                    <input v-if="a.ecs_mode === 'static'" type="number"
+                           class="form-control" style="max-width: 60px;"
+                           v-model.number="a.ecs_prefix" placeholder="24" min="0" max="32">
+                    <div class="form-text small" style="font-size: 11px;">支持协议前缀 (tcp://, udp://, doh://, dot://, doq://, https://, tls://, quic://) 以及逗号分隔的多个上游
+                        <span v-if="a.ecs_mode"> | ECS 注入: {{ ecsSummary(a) }}</span>
+                    </div>
                 </template>
 
                 <!-- Static TXT -->
                 <template v-if="a.type === 'static_txt_response'">
-                    <textarea class="form-control" rows="2" v-model="a._textSingle" placeholder="每行一个 TXT 字符串"
-                        @input="updateTxtText(a)"></textarea>
+                    <input type="text" class="form-control" v-model="a._textSingle" placeholder="单个字符串或逗号分隔多个"
+                        @input="updateTxtText(a)">
                     <button class="btn btn-outline-secondary" type="button" @click="a._showArray = !a._showArray">数组/TTL</button>
                     <div v-if="a._showArray" class="input-group-text bg-white">
                         TTL: <input type="number" class="form-control form-control-sm" style="max-width: 70px;" v-model.number="a.ttl" placeholder="300" min="1">
                     </div>
-                    <div class="form-text small" style="font-size: 11px;">每行对应一个 TXT 字符串，字符串内可保留逗号</div>
+                    <div class="form-text small" style="font-size: 11px;">逗号分隔多段，或点击"数组/TTL"配置TTL</div>
                 </template>
 
                 <!-- Replace TXT -->
                 <template v-if="a.type === 'replace_txt_response'">
-                    <textarea class="form-control" rows="2" v-model="a._textSingle" placeholder="每行一个替换后的 TXT 字符串"
-                        @input="updateTxtText(a)"></textarea>
-                    <div class="form-text small" style="font-size: 11px;">每行对应一个 TXT 字符串，字符串内可保留逗号</div>
+                    <input type="text" class="form-control" v-model="a._textSingle" placeholder="替换为的TXT内容"
+                        @input="updateTxtText(a)">
+                    <div class="form-text small" style="font-size: 11px;">逗号分隔多段，或直接编辑JSON使用[]数组格式</div>
                 </template>
 
                 <button class="btn btn-outline-danger" @click="actions.splice(idx, 1)">×</button>
@@ -887,13 +983,38 @@
                     if (type === 'allow') { /* No fields */ }
                     if (type === 'deny') { /* No fields */ }
                     if (type === 'continue') { /* No fields */ }
-                    if (type === 'forward') { a.upstream = ''; a.transport = 'udp'; }
+                    if (type === 'forward') { a.upstream = ''; a.transport = 'udp'; a.ecs_mode = ''; }
                 };
 
                 const updateTxtText = (a) => {
+                    // 从单字符串输入更新到数组
                     if (a._textSingle !== undefined) {
-                        a.text = a._textSingle.split(/\r?\n/).map(s => s.trim()).filter(s => s);
+                        a.text = a._textSingle.split(',').map(s => s.trim()).filter(s => s);
                     }
+                };
+
+                // ECS 辅助方法：Forward action ECS 模式切换时清理/初始化相关字段
+                const resetForwardEcsFields = (a) => {
+                    delete a.ecs_ip;
+                    delete a.ecs_prefix;
+                    delete a.ecs_prefix_v4;
+                    delete a.ecs_prefix_v6;
+                    if (a.ecs_mode === 'from_client_ip') {
+                        a.ecs_prefix_v4 = 24;
+                        a.ecs_prefix_v6 = 56;
+                    } else if (a.ecs_mode === 'static') {
+                        a.ecs_ip = '';
+                        a.ecs_prefix = 24;
+                    }
+                };
+
+                // ECS 辅助方法：生成 ECS 摘要文本（供模板显示）
+                const ecsSummary = (a) => {
+                    if (!a.ecs_mode) return '';
+                    if (a.ecs_mode === 'clear') return 'Clear';
+                    if (a.ecs_mode === 'from_client_ip') return `ClientIP /${a.ecs_prefix_v4 || 24}`;
+                    if (a.ecs_mode === 'static') return `Static ${a.ecs_ip}/${a.ecs_prefix || 24}`;
+                    return a.ecs_mode;
                 };
 
                 // 使用Vue 3的watch监听actions，确保text字段正确同步
@@ -911,7 +1032,7 @@
                     });
                 }, { deep: true });
 
-                return { addAction, resetActionFields, pipelineOptions, updateTxtText };
+                return { addAction, resetActionFields, resetForwardEcsFields, ecsSummary, pipelineOptions, updateTxtText };
             }
         };
 
@@ -944,6 +1065,10 @@
                         min_ttl: 0,
                         bind_udp: "0.0.0.0:5353",
                         bind_tcp: "0.0.0.0:5353",
+                        bind_doh: "",
+                        doh_tls_cert: "",
+                        doh_tls_key: "",
+                        doh_path: "/dns-query",
                         default_upstream: "1.1.1.1:53",
                         upstream_timeout_ms: 2000,
                         request_timeout_ms: null,
@@ -1112,14 +1237,71 @@
                     'response_txt_content': 'TXT Content'
                 };
 
-                const toCleanJsonString = (cfgObj) => JSON.stringify(cfgObj, (key, value) => {
-                    if (key && key.startsWith('_')) return undefined;
-                    // 过滤掉空的 geosite_data_paths 数组
-                    if (key === 'geosite_data_paths' && Array.isArray(value) && value.length === 0) {
-                        return undefined;
+                // ECS 辅助函数：将扁平 ecs_* 字段重组为嵌套 ecs:{} 对象（JSON 序列化时使用）
+                const buildEcsObject = (obj) => {
+                    if (!obj.ecs_mode) return undefined;
+                    switch (obj.ecs_mode) {
+                        case 'clear':
+                            return { mode: 'clear' };
+                        case 'from_client_ip':
+                            return {
+                                mode: 'from_client_ip',
+                                prefix_v4: obj.ecs_prefix_v4 ?? 24,
+                                prefix_v6: obj.ecs_prefix_v6 ?? 56,
+                            };
+                        case 'static':
+                            return {
+                                mode: 'static',
+                                ip: obj.ecs_ip,
+                                prefix: obj.ecs_prefix ?? 24,
+                            };
+                        default: return undefined;
                     }
-                    return value;
-                }, 2);
+                };
+
+                // ECS 辅助函数：将嵌套 ecs:{} 对象展平为扁平 ecs_* 字段（加载 JSON 时使用）
+                const flattenEcsFields = (obj) => {
+                    if (!obj.ecs) return;
+                    obj.ecs_mode = obj.ecs.mode;
+                    if (obj.ecs.mode === 'from_client_ip') {
+                        obj.ecs_prefix_v4 = obj.ecs.prefix_v4;
+                        obj.ecs_prefix_v6 = obj.ecs.prefix_v6;
+                    } else if (obj.ecs.mode === 'static') {
+                        obj.ecs_ip = obj.ecs.ip;
+                        obj.ecs_prefix = obj.ecs.prefix;
+                    }
+                    delete obj.ecs;
+                };
+
+                const toCleanJsonString = (cfgObj) => {
+                    // 深拷贝，过滤 _ 前缀字段和空 geosite_data_paths
+                    // 保留 ecs_* 扁平字段供下方 buildEcsObject 使用
+                    const clean = JSON.parse(JSON.stringify(cfgObj, (key, value) => {
+                        if (key && key.startsWith('_')) return undefined;
+                        if (key === 'geosite_data_paths' && Array.isArray(value) && value.length === 0) return undefined;
+                        return value;
+                    }));
+                    // 构建嵌套 ecs 对象，然后删除扁平 ecs_* 字段
+                    const processEcs = (obj) => {
+                        const ecs = buildEcsObject(obj);
+                        if (ecs) obj.ecs = ecs;
+                        delete obj.ecs_mode;
+                        delete obj.ecs_ip;
+                        delete obj.ecs_prefix;
+                        delete obj.ecs_prefix_v4;
+                        delete obj.ecs_prefix_v6;
+                    };
+                    (clean.pipelines || []).forEach(pipe => {
+                        processEcs(pipe);
+                        (pipe.rules || []).forEach(rule => {
+                            [rule.actions, rule.response_actions_on_match, rule.response_actions_on_miss]
+                                .forEach(actions => (actions || []).forEach(a => {
+                                    if (a.type === 'forward') processEcs(a);
+                                }));
+                        });
+                    });
+                    return JSON.stringify(clean, null, 2);
+                };
 
                 // Sync Config -> JSON
                 watch(config, (newVal) => {
@@ -1236,9 +1418,16 @@
                         // attach _oldId/_syncedId for rename tracking
                         parsed.pipelines.forEach(p => {
                             p.rules = Array.isArray(p.rules) ? p.rules : [];
+                            flattenEcsFields(p);  // 展平 Pipeline 级嵌套 ecs → 扁平字段
                             p._oldId = p.id;
                             p._syncedId = p.id;
-                            p.rules.forEach(r => normalizeRule(r));
+                            p.rules.forEach(r => {
+                                normalizeRule(r);
+                                // 展平所有 Forward action 的嵌套 ecs → 扁平字段
+                                (r.actions || []).forEach(a => { if (a.type === 'forward') flattenEcsFields(a); });
+                                (r.response_actions_on_match || []).forEach(a => { if (a.type === 'forward') flattenEcsFields(a); });
+                                (r.response_actions_on_miss || []).forEach(a => { if (a.type === 'forward') flattenEcsFields(a); });
+                            });
                         });
                         parsed.pipeline_select.forEach(sel => normalizePipelineSelect(sel));
                         config.value = parsed;
@@ -1538,6 +1727,28 @@
                     return rule.actions.some(action => action.type === 'forward');
                 };
 
+                // Pipeline 级 ECS 模式切换时清理/初始化相关字段
+                const resetPipelineEcsFields = (pipe) => {
+                    delete pipe.ecs_ip;
+                    delete pipe.ecs_prefix;
+                    delete pipe.ecs_prefix_v4;
+                    delete pipe.ecs_prefix_v6;
+                    if (pipe.ecs_mode === 'from_client_ip') {
+                        pipe.ecs_prefix_v4 = 24;
+                        pipe.ecs_prefix_v6 = 56;
+                    } else if (pipe.ecs_mode === 'static') {
+                        pipe.ecs_ip = '';
+                        pipe.ecs_prefix = 24;
+                    }
+                };
+
+                // 检查 Pipeline 内的 Forward action 是否配置了 ECS
+                const hasEcsAction = (pipe) => {
+                    return (pipe.rules || []).some(rule =>
+                        (rule.actions || []).some(a => a.type === 'forward' && a.ecs_mode)
+                    );
+                };
+
                 // GeoSite path management
                 const addGeositePath = () => {
                     geositePaths.value.push('');
@@ -1787,7 +1998,8 @@
                         const pidSafe = idMap[pid];
                         const entryId = `${pidSafe}_entry`;
 
-                        graph += `  subgraph ${pidSafe}_sg["${escapeMermaidText(pid)}"]\n`;
+                        const ecsLabel = pipe.ecs_mode ? ` [ECS:${pipe.ecs_mode}]` : '';
+                        graph += `  subgraph ${pidSafe}_sg["${escapeMermaidText(pid + ecsLabel)}"]\n`;
                         graph += `    direction TB\n`;
                         graph += `    ${entryId}([入口])\n`;
 
@@ -1902,7 +2114,7 @@
                     addPipelineSelect, removePipelineSelect,
                     addPipeline, removePipeline,
                     addRule, removeRule,
-                    ruleHasForwardAction,
+                    ruleHasForwardAction, resetPipelineEcsFields, hasEcsAction,
                     activePipelineIndex, togglePipeline,
                     showEditor, jumpToOutline, onEditorScroll, onOutlineWheel,
                     currentTab, mermaidRef, renderFlowchart,

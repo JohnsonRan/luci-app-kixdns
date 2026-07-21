@@ -4,7 +4,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-kixdns
-PKG_VERSION:=1.4.4
+PKG_VERSION:=1.4.5
 PKG_RELEASE:=1
 
 LUCI_TITLE:=LuCI Support for KixDNS
