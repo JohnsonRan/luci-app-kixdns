@@ -1,0 +1,69 @@
+name: Build OpenWrt packages
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x86_64
+          - aarch64_generic
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Build packages
+        uses: openwrt/gh-action-sdk@main
+        env:
+          ARCH: ${{ matrix.arch }}-openwrt-25.12
+          FEEDNAME: kixdns
+          PACKAGES: kixdns luci-app-kixdns
+          NO_REFRESH_CHECK: true
+
+      - name: Package build output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_dir="bin/packages/${{ matrix.arch }}/kixdns"
+          mapfile -d '' packages < <(
+            find "$package_dir" -maxdepth 1 -type f -name '*.apk' -print0
+          )
+
+          if (( ${#packages[@]} < 2 )); then
+            echo "Expected kixdns and luci-app-kixdns APKs" >&2
+            exit 1
+          fi
+
+          tar -czf "kixdns_${{ matrix.arch }}-openwrt-25.12.tar.gz" \
+            -C "$package_dir" .
+
+      - name: Attach packages to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: kixdns_${{ matrix.arch }}-openwrt-25.12.tar.gz
+          fail_on_unmatched_files: true
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: kixdns_${{ matrix.arch }}-openwrt-25.12
+          path: kixdns_${{ matrix.arch }}-openwrt-25.12.tar.gz
+          if-no-files-found: error
