@@ -152,6 +152,16 @@
             box-shadow: 0 .45rem 1rem var(--editor-sticky-shadow);
         }
         .editor-toolbar { gap: .75rem; margin-bottom: .65rem; }
+        .editor-dirty-badge {
+            padding: .12rem .5rem;
+            font-size: .72rem;
+            font-weight: 600;
+            color: #ffc107;
+            background: rgba(255, 193, 7, .14);
+            border: 1px solid rgba(255, 193, 7, .45);
+            border-radius: .7rem;
+            white-space: nowrap;
+        }
         .bridge-status { margin-inline-start: .4rem; }
         .editor-sticky-controls .nav-tabs { margin-bottom: .6rem; }
         .editor-outline-shell { min-width: 0; }
@@ -268,6 +278,7 @@
                         <button type="button" class="btn btn-outline-secondary" :disabled="busy" @click="requestLoad">重新读取</button>
                         <button type="button" class="btn btn-primary" :disabled="busy" @click="requestSave(false)">保存</button>
                         <button type="button" class="btn btn-success" :disabled="busy" @click="requestSave(true)">保存并应用</button>
+                        <span v-if="dirty" class="editor-dirty-badge" title="编辑器中有尚未保存的修改">未保存</span>
                         <span class="small bridge-status" :class="bridgeStatusClass" role="status">{{ bridgeStatus }}</span>
                     </div>
 
@@ -776,52 +787,54 @@
     <!-- Component Templates -->
     <script type="text/x-template" id="matcher-list-template">
         <div>
-            <div v-for="(m, idx) in matchers" :key="idx" class="input-group input-group-sm mb-1">
-                <select v-if="withOperator" class="form-select" style="max-width: 120px;" v-model="m.operator">
-                    <option value="and">AND</option>
-                    <option value="or">OR</option>
-                    <option value="and_not">AND NOT</option>
-                    <option value="or_not">OR NOT</option>
-                    <option value="not">NOT</option>
-                </select>
-                <select class="form-select" style="max-width: 140px;" v-model="m.type" @change="resetMatcherFields(m)">
-                    <option v-for="(label, type) in types" :value="type">{{ label }}</option>
-                </select>
+            <div v-for="(m, idx) in matchers" :key="idx" class="matcher-item">
+                <div class="d-flex flex-wrap align-items-center gap-1">
+                    <select v-if="withOperator" class="form-select form-select-sm" style="max-width: 110px;" v-model="m.operator">
+                        <option value="and">AND</option>
+                        <option value="or">OR</option>
+                        <option value="and_not">AND NOT</option>
+                        <option value="or_not">OR NOT</option>
+                        <option value="not">NOT</option>
+                    </select>
+                    <select class="form-select form-select-sm" style="max-width: 150px;" v-model="m.type" @change="resetMatcherFields(m)">
+                        <option v-for="(label, type) in types" :value="type">{{ label }}</option>
+                    </select>
 
-                <!-- Dynamic Inputs based on type -->
-                <input v-if="hasField(m.type, 'value')" type="text" class="form-control" v-model="m.value"
-                    :placeholder="m.type === 'geo_site' || m.type === 'geo_site_not' || m.type === 'response_request_domain_geosite' || m.type === 'response_request_domain_geosite_not' ? 'cn 或 geosite:cn' : 'Value'">
-                <input v-if="hasField(m.type, 'cidr')" type="text" class="form-control" v-model="m.cidr" placeholder="CIDR 或逗号分隔列表 (e.g. 127.0.0.0/8,0.0.0.0/8)">
-                <div v-if="hasField(m.type, 'expect')" class="input-group-text bg-white">
-                    <input type="checkbox" class="form-check-input mt-0" v-model="m.expect"> &nbsp;Expect
+                    <!-- Dynamic Inputs based on type -->
+                    <input v-if="hasField(m.type, 'value')" type="text" class="form-control form-control-sm" style="flex: 1 1 140px;" v-model="m.value"
+                        :placeholder="m.type === 'geo_site' || m.type === 'geo_site_not' || m.type === 'response_request_domain_geosite' || m.type === 'response_request_domain_geosite_not' ? 'cn 或 geosite:cn' : 'Value'">
+                    <input v-if="hasField(m.type, 'cidr')" type="text" class="form-control form-control-sm" style="flex: 1 1 180px;" v-model="m.cidr" placeholder="CIDR 或逗号分隔列表 (e.g. 127.0.0.0/8,0.0.0.0/8)">
+                    <label v-if="hasField(m.type, 'expect')" class="d-inline-flex align-items-center gap-1 small mb-0">
+                        <input type="checkbox" class="form-check-input mt-0" v-model="m.expect"> Expect
+                    </label>
+
+                    <!-- GeoIP Country Codes -->
+                    <input v-if="hasField(m.type, 'country_codes')" type="text" class="form-control form-control-sm" style="flex: 1 1 140px;" v-model="m.country_codes"
+                        placeholder="CN,US,JP 或 geoip:CN">
+
+                    <!-- TXT Content Mode -->
+                    <select v-if="hasField(m.type, 'mode') && m.type === 'response_txt_content'" class="form-select form-select-sm" style="max-width: 170px;" v-model="m.mode">
+                        <option value="exact">Exact (精确匹配)</option>
+                        <option value="prefix">Prefix (前缀匹配)</option>
+                        <option value="regex">Regex (正则匹配)</option>
+                    </select>
+
+                    <!-- QType Dropdown -->
+                    <select v-if="hasField(m.type, 'value') && m.type === 'qtype'" class="form-select form-select-sm" style="max-width: 100px;" v-model="m.value">
+                        <option value="A">A</option>
+                        <option value="AAAA">AAAA</option>
+                        <option value="CNAME">CNAME</option>
+                        <option value="MX">MX</option>
+                        <option value="TXT">TXT</option>
+                        <option value="NS">NS</option>
+                        <option value="PTR">PTR</option>
+                        <option value="SOA">SOA</option>
+                        <option value="SRV">SRV</option>
+                        <option value="OPT">OPT</option>
+                    </select>
+
+                    <button class="btn btn-sm btn-outline-danger ms-auto" @click="matchers.splice(idx, 1)">×</button>
                 </div>
-
-                <!-- GeoIP Country Codes -->
-                <input v-if="hasField(m.type, 'country_codes')" type="text" class="form-control" v-model="m.country_codes"
-                    placeholder="CN,US,JP 或 geoip:CN">
-
-                <!-- TXT Content Mode -->
-                <select v-if="hasField(m.type, 'mode') && m.type === 'response_txt_content'" class="form-select" v-model="m.mode">
-                    <option value="exact">Exact (精确匹配)</option>
-                    <option value="prefix">Prefix (前缀匹配)</option>
-                    <option value="regex">Regex (正则匹配)</option>
-                </select>
-
-                <!-- QType Dropdown -->
-                <select v-if="hasField(m.type, 'value') && m.type === 'qtype'" class="form-select" v-model="m.value">
-                    <option value="A">A</option>
-                    <option value="AAAA">AAAA</option>
-                    <option value="CNAME">CNAME</option>
-                    <option value="MX">MX</option>
-                    <option value="TXT">TXT</option>
-                    <option value="NS">NS</option>
-                    <option value="PTR">PTR</option>
-                    <option value="SOA">SOA</option>
-                    <option value="SRV">SRV</option>
-                    <option value="OPT">OPT</option>
-                </select>
-
-                <button class="btn btn-outline-danger" @click="matchers.splice(idx, 1)">×</button>
             </div>
             <button class="btn btn-sm btn-link text-decoration-none p-0" @click="addMatcher">+ 添加条件</button>
         </div>
@@ -829,100 +842,105 @@
 
     <script type="text/x-template" id="action-list-template">
         <div>
-            <div v-for="(a, idx) in actions" :key="idx" class="input-group input-group-sm mb-1">
-                <select class="form-select" style="max-width: 160px;" v-model="a.type" @change="resetActionFields(a)">
-                    <option value="log">Log</option>
-                    <option value="static_response">Static Response</option>
-                    <option value="static_ip_response">Static IP</option>
-                    <option value="static_txt_response">Static TXT</option>
-                    <option value="replace_txt_response">Replace TXT</option>
-                    <option value="jump_to_pipeline">Jump to Pipeline</option>
-                    <option value="allow">Allow (Pass)</option>
-                    <option value="deny">Deny (Drop)</option>
-                    <option value="forward">Forward</option>
-                    <option value="continue">Continue</option>
-                </select>
-
-                <!-- Log -->
-                <select v-if="a.type === 'log'" class="form-select" v-model="a.level">
-                    <option value="trace">Trace</option>
-                    <option value="debug">Debug</option>
-                    <option value="info">Info</option>
-                    <option value="warn">Warn</option>
-                    <option value="error">Error</option>
-                </select>
-
-                <!-- Static Response -->
-                <select v-if="a.type === 'static_response'" class="form-select" v-model="a.rcode">
-                    <option value="NOERROR">NOERROR</option>
-                    <option value="NXDOMAIN">NXDOMAIN</option>
-                    <option value="SERVFAIL">SERVFAIL</option>
-                    <option value="REFUSED">REFUSED</option>
-                </select>
-
-                <!-- Static IP -->
-                <input v-if="a.type === 'static_ip_response'" type="text" class="form-control" v-model="a.ip" placeholder="IP Address">
-
-                <!-- Jump -->
-                <select v-if="a.type === 'jump_to_pipeline'" class="form-select" v-model="a.pipeline">
-                    <option disabled value="">选择 Pipeline</option>
-                    <option v-for="p in pipelineOptions" :key="p" :value="p" :disabled="p === currentPipelineId">{{ p }}</option>
-                </select>
-
-                <!-- Forward -->
-                <template v-if="a.type === 'forward'">
-                    <input type="text" class="form-control" v-model="a.upstream" placeholder="8.8.8.8:53 或 tcp://8.8.4.4:53,doh://dns.google/dns-query,dot://1.1.1.1:853,doq://dns.quad9.net:853">
-                    <select class="form-select" style="max-width: 110px;" v-model="a.transport">
-                        <option value="udp">UDP</option>
-                        <option value="tcp">TCP</option>
-                        <option value="tcp_udp">TCP+UDP</option>
-                        <option value="doh">DoH</option>
-                        <option value="dot">DoT</option>
-                        <option value="doq">DoQ</option>
+            <div v-for="(a, idx) in actions" :key="idx" class="action-item">
+                <div class="d-flex flex-wrap align-items-center gap-1">
+                    <select class="form-select form-select-sm" style="max-width: 160px;" v-model="a.type" @change="resetActionFields(a)">
+                        <option value="log">Log</option>
+                        <option value="static_response">Static Response</option>
+                        <option value="static_ip_response">Static IP</option>
+                        <option value="static_txt_response">Static TXT</option>
+                        <option value="replace_txt_response">Replace TXT</option>
+                        <option value="jump_to_pipeline">Jump to Pipeline</option>
+                        <option value="allow">Allow (Pass)</option>
+                        <option value="deny">Deny (Drop)</option>
+                        <option value="forward">Forward</option>
+                        <option value="continue">Continue</option>
                     </select>
-                    <!-- ECS injection mode (RFC 7871) -->
-                    <select class="form-select" style="max-width: 150px;"
-                            v-model="a.ecs_mode" @change="resetForwardEcsFields(a)">
-                        <option value="">无 ECS</option>
-                        <option value="clear">ECS: Clear</option>
-                        <option value="from_client_ip">ECS: ClientIP</option>
-                        <option value="static">ECS: Static</option>
+
+                    <!-- Log -->
+                    <select v-if="a.type === 'log'" class="form-select form-select-sm" style="max-width: 100px;" v-model="a.level">
+                        <option value="trace">Trace</option>
+                        <option value="debug">Debug</option>
+                        <option value="info">Info</option>
+                        <option value="warn">Warn</option>
+                        <option value="error">Error</option>
                     </select>
-                    <!-- FromClientIp 参数（紧凑内联） -->
-                    <input v-if="a.ecs_mode === 'from_client_ip'" type="number"
-                           class="form-control" style="max-width: 70px;"
-                           v-model.number="a.ecs_prefix_v4" placeholder="24" min="0" max="32">
-                    <!-- Static 参数（紧凑内联） -->
-                    <input v-if="a.ecs_mode === 'static'" type="text"
-                           class="form-control" style="max-width: 100px;"
-                           v-model="a.ecs_ip" placeholder="1.2.3.0">
-                    <input v-if="a.ecs_mode === 'static'" type="number"
-                           class="form-control" style="max-width: 60px;"
-                           v-model.number="a.ecs_prefix" placeholder="24" min="0" max="32">
-                    <div class="form-text small" style="font-size: 11px;">支持协议前缀 (tcp://, udp://, doh://, dot://, doq://, https://, tls://, quic://) 以及逗号分隔的多个上游
-                        <span v-if="a.ecs_mode"> | ECS 注入: {{ ecsSummary(a) }}</span>
-                    </div>
-                </template>
 
-                <!-- Static TXT -->
-                <template v-if="a.type === 'static_txt_response'">
-                    <input type="text" class="form-control" v-model="a._textSingle" placeholder="单个字符串或逗号分隔多个"
-                        @input="updateTxtText(a)">
-                    <button class="btn btn-outline-secondary" type="button" @click="a._showArray = !a._showArray">数组/TTL</button>
-                    <div v-if="a._showArray" class="input-group-text bg-white">
-                        TTL: <input type="number" class="form-control form-control-sm" style="max-width: 70px;" v-model.number="a.ttl" placeholder="300" min="1">
-                    </div>
-                    <div class="form-text small" style="font-size: 11px;">逗号分隔多段，或点击"数组/TTL"配置TTL</div>
-                </template>
+                    <!-- Static Response -->
+                    <select v-if="a.type === 'static_response'" class="form-select form-select-sm" style="max-width: 130px;" v-model="a.rcode">
+                        <option value="NOERROR">NOERROR</option>
+                        <option value="NXDOMAIN">NXDOMAIN</option>
+                        <option value="SERVFAIL">SERVFAIL</option>
+                        <option value="REFUSED">REFUSED</option>
+                    </select>
 
-                <!-- Replace TXT -->
-                <template v-if="a.type === 'replace_txt_response'">
-                    <input type="text" class="form-control" v-model="a._textSingle" placeholder="替换为的TXT内容"
-                        @input="updateTxtText(a)">
-                    <div class="form-text small" style="font-size: 11px;">逗号分隔多段，或直接编辑JSON使用[]数组格式</div>
-                </template>
+                    <!-- Static IP -->
+                    <input v-if="a.type === 'static_ip_response'" type="text" class="form-control form-control-sm" style="max-width: 160px;" v-model="a.ip" placeholder="IP Address">
 
-                <button class="btn btn-outline-danger" @click="actions.splice(idx, 1)">×</button>
+                    <!-- Jump -->
+                    <select v-if="a.type === 'jump_to_pipeline'" class="form-select form-select-sm" style="max-width: 180px;" v-model="a.pipeline">
+                        <option disabled value="">选择 Pipeline</option>
+                        <option v-for="p in pipelineOptions" :key="p" :value="p" :disabled="p === currentPipelineId">{{ p }}</option>
+                    </select>
+
+                    <!-- Forward -->
+                    <template v-if="a.type === 'forward'">
+                        <input type="text" class="form-control form-control-sm" style="flex: 1 1 200px; min-width: 180px;" v-model="a.upstream" placeholder="8.8.8.8:53 或 tcp://8.8.4.4:53,doh://dns.google/dns-query">
+                        <select class="form-select form-select-sm" style="max-width: 100px;" v-model="a.transport">
+                            <option value="udp">UDP</option>
+                            <option value="tcp">TCP</option>
+                            <option value="tcp_udp">TCP+UDP</option>
+                            <option value="doh">DoH</option>
+                            <option value="dot">DoT</option>
+                            <option value="doq">DoQ</option>
+                        </select>
+                        <!-- ECS injection mode (RFC 7871) -->
+                        <select class="form-select form-select-sm" style="max-width: 140px;"
+                                v-model="a.ecs_mode" @change="resetForwardEcsFields(a)">
+                            <option value="">无 ECS</option>
+                            <option value="clear">ECS: Clear</option>
+                            <option value="from_client_ip">ECS: ClientIP</option>
+                            <option value="static">ECS: Static</option>
+                        </select>
+                        <!-- FromClientIp 参数（紧凑内联） -->
+                        <input v-if="a.ecs_mode === 'from_client_ip'" type="number"
+                               class="form-control form-control-sm" style="max-width: 70px;"
+                               v-model.number="a.ecs_prefix_v4" placeholder="24" min="0" max="32">
+                        <!-- Static 参数（紧凑内联） -->
+                        <input v-if="a.ecs_mode === 'static'" type="text"
+                               class="form-control form-control-sm" style="max-width: 100px;"
+                               v-model="a.ecs_ip" placeholder="1.2.3.0">
+                        <input v-if="a.ecs_mode === 'static'" type="number"
+                               class="form-control form-control-sm" style="max-width: 60px;"
+                               v-model.number="a.ecs_prefix" placeholder="24" min="0" max="32">
+                    </template>
+
+                    <!-- Static TXT -->
+                    <template v-if="a.type === 'static_txt_response'">
+                        <input type="text" class="form-control form-control-sm" style="flex: 1 1 160px;" v-model="a._textSingle" placeholder="单个字符串或逗号分隔多个"
+                            @input="updateTxtText(a)">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" @click="a._showArray = !a._showArray">数组/TTL</button>
+                        <span v-if="a._showArray" class="d-inline-flex align-items-center gap-1">
+                            TTL: <input type="number" class="form-control form-control-sm" style="max-width: 70px;" v-model.number="a.ttl" placeholder="300" min="1">
+                        </span>
+                    </template>
+
+                    <!-- Replace TXT -->
+                    <template v-if="a.type === 'replace_txt_response'">
+                        <input type="text" class="form-control form-control-sm" style="flex: 1 1 160px;" v-model="a._textSingle" placeholder="替换为的TXT内容"
+                            @input="updateTxtText(a)">
+                    </template>
+
+                    <button class="btn btn-sm btn-outline-danger ms-auto" @click="actions.splice(idx, 1)">×</button>
+                </div>
+                <!-- Forward 提示文本 -->
+                <div v-if="a.type === 'forward'" class="form-text small" style="font-size: 11px; margin-top: .25rem;">支持协议前缀 (tcp://, udp://, doh://, dot://, doq://, https://, tls://, quic://) 以及逗号分隔的多个上游
+                    <span v-if="a.ecs_mode"> | ECS 注入: {{ ecsSummary(a) }}</span>
+                </div>
+                <!-- Static TXT 提示文本 -->
+                <div v-if="a.type === 'static_txt_response'" class="form-text small" style="font-size: 11px; margin-top: .25rem;">逗号分隔多段，或点击"数组/TTL"配置TTL</div>
+                <!-- Replace TXT 提示文本 -->
+                <div v-if="a.type === 'replace_txt_response'" class="form-text small" style="font-size: 11px; margin-top: .25rem;">逗号分隔多段，或直接编辑JSON使用[]数组格式</div>
             </div>
             <button class="btn btn-sm btn-link text-decoration-none p-0" @click="addAction">+ 添加动作</button>
         </div>
@@ -1116,21 +1134,6 @@
                     if (a.ecs_mode === 'static') return `Static ${a.ecs_ip}/${a.ecs_prefix || 24}`;
                     return a.ecs_mode;
                 };
-
-                // 使用Vue 3的watch监听actions，确保text字段正确同步
-                const stopWatch = Vue.watch(() => props.pipelines, (pipelines) => {
-                    (pipelines || []).forEach(pipe => {
-                        (pipe.rules || []).forEach(rule => {
-                            [rule.actions, rule.response_actions_on_match, rule.response_actions_on_miss].forEach(actions => {
-                                (actions || []).forEach(a => {
-                                    if ((a.type === 'static_txt_response' || a.type === 'replace_txt_response') && a._textSingle === undefined && Array.isArray(a.text)) {
-                                        a._textSingle = a.text.join('\n');
-                                    }
-                                });
-                            });
-                        });
-                    });
-                }, { deep: true });
 
                 return { addAction, resetActionFields, resetForwardEcsFields, ecsSummary, pipelineOptions, updateTxtText };
             }
@@ -1370,6 +1373,14 @@
                     delete obj.ecs;
                 };
 
+                // UI 辅助字段初始化：为 TXT 类 action 生成单行编辑字符串 _textSingle（加载 JSON 时使用）
+                const initActionUiFields = (a) => {
+                    if ((a.type === 'static_txt_response' || a.type === 'replace_txt_response') &&
+                        a._textSingle === undefined && Array.isArray(a.text)) {
+                        a._textSingle = a.text.join(',');
+                    }
+                };
+
                 const toCleanJsonString = (cfgObj) => {
                     // 深拷贝，过滤 _ 前缀字段和空 geosite_data_paths
                     // 保留 ecs_* 扁平字段供下方 buildEcsObject 使用
@@ -1519,10 +1530,13 @@
                             p._syncedId = p.id;
                             p.rules.forEach(r => {
                                 normalizeRule(r);
-                                // 展平所有 Forward action 的嵌套 ecs → 扁平字段
-                                (r.actions || []).forEach(a => { if (a.type === 'forward') flattenEcsFields(a); });
-                                (r.response_actions_on_match || []).forEach(a => { if (a.type === 'forward') flattenEcsFields(a); });
-                                (r.response_actions_on_miss || []).forEach(a => { if (a.type === 'forward') flattenEcsFields(a); });
+                                // 展平所有 Forward action 的嵌套 ecs → 扁平字段，并初始化 TXT action 的 UI 辅助字段
+                                [r.actions, r.response_actions_on_match, r.response_actions_on_miss].forEach(actions => {
+                                    (actions || []).forEach(a => {
+                                        if (a.type === 'forward') flattenEcsFields(a);
+                                        initActionUiFields(a);
+                                    });
+                                });
                             });
                         });
                         parsed.pipeline_select.forEach(sel => normalizePipelineSelect(sel));
@@ -2266,7 +2280,7 @@
 
                 return {
                     config, rawJson, manualJsonEdit, geositePaths, geoipFilterCountriesString, geositeEnabled,
-                    bridgeStatus, bridgeStatusClass, busy,
+                    bridgeStatus, bridgeStatusClass, busy, dirty,
                     editorPaneRef, stickyControlsRef, outlineRef, outlineItems, activeOutlineKey,
                     jsonTextareaRef, jsonGutterInnerRef, jsonHighlightCodeRef,
                     highlightedJson, jsonLineNumbers, jsonLineCount, jsonStatus,
