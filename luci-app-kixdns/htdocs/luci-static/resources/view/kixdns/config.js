@@ -34,7 +34,7 @@ return view.extend({
 		var operationPending = false;
 		var frame = E('iframe', {
 			'class': 'kixdns-config-editor-frame',
-			'src': L.resource('kixdns/config_editor.html') + '?v=1.4.9',
+			'src': L.resource('kixdns/config_editor.html') + '?v=1.5.0',
 			'title': _('KixDNS configuration editor')
 		});
 
