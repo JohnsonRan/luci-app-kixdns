@@ -1501,6 +1501,13 @@
                     bridgeStatusClass.value = `text-${tone}`;
                 };
 
+                // 有未保存修改时，将绿色状态提示降级为黄色警告，避免误导
+                watch(dirty, (isDirty) => {
+                    if (isDirty && bridgeStatusClass.value === 'text-success') {
+                        setBridgeStatus('有尚未保存的修改', 'warning');
+                    }
+                });
+
                 const setEditorTheme = (dark) => {
                     darkTheme = dark === true;
                     document.documentElement.classList.toggle('dark', darkTheme);
