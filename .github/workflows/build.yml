@@ -32,7 +32,7 @@ jobs:
         # this fork enabled download-ci-llvm
         uses: sbwml/openwrt-gh-action-sdk@go1.26
         env:
-          ARCH: ${{ matrix.arch }}-openwrt-25.12
+          ARCH: ${{ matrix.arch }}-master
           FEEDNAME: kixdns
           PACKAGES: kixdns luci-app-kixdns
           NO_REFRESH_CHECK: true
