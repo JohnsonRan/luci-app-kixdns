@@ -10,7 +10,70 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-24-10:
+    name: Build ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x86_64
+          - aarch64_generic
+          - aarch64_cortex-a53
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Build packages
+        # this fork enabled download-ci-llvm
+        uses: JohnsonRan/openwrt-gh-action-sdk@main
+        env:
+          ARCH: ${{ matrix.arch }}-openwrt-24.10
+          FEEDNAME: kixdns
+          PACKAGES: kixdns luci-app-kixdns
+          NO_REFRESH_CHECK: true
+
+      - name: Package build output
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_dir="bin/packages/${{ matrix.arch }}/kixdns"
+          package_ext="ipk"
+          output="kixdns_${{ matrix.arch }}-openwrt-24.10.tar.gz"
+          staging_dir="$(mktemp -d)"
+          trap 'rm -rf "$staging_dir"' EXIT
+
+          find_package() {
+            find "$package_dir" -maxdepth 1 -type f \
+              \( -name "$1-*.${package_ext}" -o -name "$1_*.${package_ext}" \) \
+              -print -quit
+          }
+
+          core_package="$(find_package kixdns)"
+          luci_package="$(find_package luci-app-kixdns)"
+
+          if [ -z "$core_package" ] || [ -z "$luci_package" ]; then
+            echo "Expected kixdns and luci-app-kixdns .${package_ext} packages in $package_dir" >&2
+            find "$package_dir" -maxdepth 1 -type f -print >&2 || true
+            exit 1
+          fi
+
+          cp "$core_package" "$luci_package" "$staging_dir/"
+          tar -czf "$output" -C "$staging_dir" .
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: kixdns_${{ matrix.arch }}-openwrt-24.10
+          path: kixdns_${{ matrix.arch }}-openwrt-24.10.tar.gz
+          if-no-files-found: error
+
+  build-25-12:
     name: Build ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
@@ -43,25 +106,28 @@ jobs:
           set -euo pipefail
 
           package_dir="bin/packages/${{ matrix.arch }}/kixdns"
-          mapfile -d '' packages < <(
-            find "$package_dir" -maxdepth 1 -type f -name '*.apk' -print0
-          )
+          package_ext="apk"
+          output="kixdns_${{ matrix.arch }}-openwrt-25.12.tar.gz"
+          staging_dir="$(mktemp -d)"
+          trap 'rm -rf "$staging_dir"' EXIT
 
-          if (( ${#packages[@]} < 2 )); then
-            echo "Expected kixdns and luci-app-kixdns APKs" >&2
+          find_package() {
+            find "$package_dir" -maxdepth 1 -type f \
+              \( -name "$1-*.${package_ext}" -o -name "$1_*.${package_ext}" \) \
+              -print -quit
+          }
+
+          core_package="$(find_package kixdns)"
+          luci_package="$(find_package luci-app-kixdns)"
+
+          if [ -z "$core_package" ] || [ -z "$luci_package" ]; then
+            echo "Expected kixdns and luci-app-kixdns .${package_ext} packages in $package_dir" >&2
+            find "$package_dir" -maxdepth 1 -type f -print >&2 || true
             exit 1
           fi
 
-          tar -czf "kixdns_${{ matrix.arch }}-openwrt-25.12.tar.gz" \
-            -C "$package_dir" .
-
-      - name: Attach packages to release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: kixdns_${{ matrix.arch }}-openwrt-25.12.tar.gz
-          fail_on_unmatched_files: true
+          cp "$core_package" "$luci_package" "$staging_dir/"
+          tar -czf "$output" -C "$staging_dir" .
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
@@ -69,3 +135,26 @@ jobs:
           name: kixdns_${{ matrix.arch }}-openwrt-25.12
           path: kixdns_${{ matrix.arch }}-openwrt-25.12.tar.gz
           if-no-files-found: error
+
+  upload-release:
+    name: Attach packages to release
+    if: github.event_name == 'release'
+    needs:
+      - build-24-10
+      - build-25-12
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: kixdns_*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Attach packages to release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: release-assets/*.tar.gz
+          fail_on_unmatched_files: true

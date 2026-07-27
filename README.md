@@ -2,7 +2,7 @@
 
 LuCI support for [KixDNS](https://github.com/olicesx/kixdns/), a high-performance DNS forwarding server written in Rust.
 
-Targets OpenWrt 25.12 with JavaScript LuCI and firewall4/nftables.
+Targets OpenWrt 24.10 and 25.12 with JavaScript LuCI and firewall4/nftables.
 
 ## Features
 
@@ -22,13 +22,13 @@ luci-app-kixdns/   LuCI application
 
 ## Install
 
-One-click install on OpenWrt (25.12, `x86_64` or `aarch64_generic`, apk-based):
+One-click install on OpenWrt 24.10 or 25.12 (`x86_64`, `aarch64_generic`, or `aarch64_cortex-a53`):
 
 ```sh
 wget -O - https://raw.githubusercontent.com/JohnsonRan/luci-app-kixdns/main/install.sh | sh
 ```
 
-This downloads the latest [release](https://github.com/JohnsonRan/luci-app-kixdns/releases/latest) for your architecture and installs it with `apk`. For other targets, build from source below.
+This detects the OpenWrt release and architecture, downloads the matching latest [release](https://github.com/JohnsonRan/luci-app-kixdns/releases/latest), and installs the `.ipk` with `opkg` on OpenWrt 24.10 or the `.apk` with `apk` on OpenWrt 25.12. For other releases or targets, build from source below.
 
 ## Building
 
