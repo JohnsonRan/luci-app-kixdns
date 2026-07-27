@@ -1,15 +1,10 @@
 #!/bin/sh
 # luci-app-kixdns one-click installer
-# Downloads the latest prebuilt release and installs it with apk.
+# Downloads the latest prebuilt release and installs it with opkg or apk.
 
 set -e
 
 REPO="JohnsonRan/luci-app-kixdns"
-
-if ! command -v apk >/dev/null 2>&1; then
-	echo "this installer requires the apk package manager (OpenWrt 24.10+)" >&2
-	exit 1
-fi
 
 [ -f /etc/openwrt_release ] || {
 	echo "/etc/openwrt_release not found, is this OpenWrt?" >&2
@@ -17,7 +12,30 @@ fi
 }
 . /etc/openwrt_release
 
-case "$DISTRIB_ARCH" in
+release="${DISTRIB_RELEASE:-}"
+case "$release" in
+	24.10|24.10.*)
+		asset_release=24.10
+		package_ext=ipk
+		package_manager=opkg
+		;;
+	25.12|25.12.*|SNAPSHOT)
+		asset_release=25.12
+		package_ext=apk
+		package_manager=apk
+		;;
+	*)
+		echo "unsupported OpenWrt release: ${release:-unknown} (supported: 24.10 and 25.12)" >&2
+		exit 1
+		;;
+esac
+
+if ! command -v "$package_manager" >/dev/null 2>&1; then
+	echo "OpenWrt $release requires the $package_manager package manager, but it was not found" >&2
+	exit 1
+fi
+
+case "${DISTRIB_ARCH:-}" in
 	x86_64*) arch=x86_64 ;;
 	aarch64_cortex-a53) arch=aarch64_cortex-a53 ;;
 	aarch64*) arch=aarch64_generic ;;
@@ -38,7 +56,7 @@ else
 	exit 1
 fi
 
-asset="kixdns_${arch}-openwrt-25.12.tar.gz"
+asset="kixdns_${arch}-openwrt-${asset_release}.tar.gz"
 url="https://github.com/$REPO/releases/latest/download/$asset"
 
 tmpdir="$(mktemp -d)"
@@ -47,13 +65,31 @@ trap 'rm -rf "$tmpdir"' EXIT INT TERM
 echo "downloading $asset..."
 if ! fetch "$tmpdir/$asset" "$url"; then
 	echo "failed to download $asset" >&2
-	echo "no prebuilt package available for architecture: $arch" >&2
+	echo "no prebuilt package available for OpenWrt $asset_release on architecture $arch" >&2
 	exit 1
 fi
 
 tar -xzf "$tmpdir/$asset" -C "$tmpdir"
 
-echo "installing packages..."
-apk add --allow-untrusted "$tmpdir"/*.apk
+core_package=""
+luci_package=""
+for package in "$tmpdir"/*."$package_ext"; do
+	[ -f "$package" ] || continue
+	case "${package##*/}" in
+		kixdns[-_]*) core_package=$package ;;
+		luci-app-kixdns[-_]*) luci_package=$package ;;
+	esac
+done
+
+if [ -z "$core_package" ] || [ -z "$luci_package" ]; then
+	echo "downloaded archive does not contain both kixdns and luci-app-kixdns .$package_ext packages" >&2
+	exit 1
+fi
+
+echo "installing packages for OpenWrt $asset_release with $package_manager..."
+case "$package_manager" in
+	opkg) opkg install "$core_package" "$luci_package" ;;
+	apk) apk add --allow-untrusted "$core_package" "$luci_package" ;;
+esac
 
 echo "installed. Configure it under LuCI: Services > KixDNS"
