@@ -30,7 +30,7 @@ jobs:
 
       - name: Build packages
         # this fork enabled download-ci-llvm
-        uses: sbwml/openwrt-gh-action-sdk@go1.26
+        uses: JohnsonRan/openwrt-gh-action-sdk@main
         env:
           ARCH: ${{ matrix.arch }}-master
           FEEDNAME: kixdns
