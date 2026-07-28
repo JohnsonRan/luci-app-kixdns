@@ -29,6 +29,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Cache Rust build data
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/openwrt-rust-cache
+          key: openwrt-rust-v3-${{ runner.os }}-${{ matrix.arch }}-24.10
+          restore-keys: |
+            openwrt-rust-v3-${{ runner.os }}-${{ matrix.arch }}-24.10
+
       - name: Build packages
         # this fork enabled download-ci-llvm
         uses: JohnsonRan/openwrt-gh-action-sdk@main
@@ -37,6 +45,7 @@ jobs:
           FEEDNAME: kixdns
           PACKAGES: kixdns luci-app-kixdns
           NO_REFRESH_CHECK: true
+          RUST_CACHE_DIR: ${{ runner.temp }}/openwrt-rust-cache
 
       - name: Package build output
         shell: bash
@@ -92,6 +101,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Cache Rust build data
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/openwrt-rust-cache
+          key: openwrt-rust-v3-${{ runner.os }}-${{ matrix.arch }}-master
+          restore-keys: |
+            openwrt-rust-v3-${{ runner.os }}-${{ matrix.arch }}-master
+
       - name: Build packages
         # this fork enabled download-ci-llvm
         uses: JohnsonRan/openwrt-gh-action-sdk@main
@@ -100,6 +117,7 @@ jobs:
           FEEDNAME: kixdns
           PACKAGES: kixdns luci-app-kixdns
           NO_REFRESH_CHECK: true
+          RUST_CACHE_DIR: ${{ runner.temp }}/openwrt-rust-cache
 
       - name: Package build output
         shell: bash
