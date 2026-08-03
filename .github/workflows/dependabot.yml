@@ -1,0 +1,125 @@
+name: Update kixdns core
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-kixdns-core
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Check for upstream updates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out package repository
+        uses: actions/checkout@v6
+        with:
+          path: luci-app-kixdns
+
+      - name: Check out kixdns upstream
+        uses: actions/checkout@v6
+        with:
+          repository: olicesx/kixdns
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+          path: upstream-kixdns
+
+      - id: info
+        name: Collect version information and source hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 0022
+
+          makefile="luci-app-kixdns/kixdns/Makefile"
+          current_version="$(sed -n 's/^PKG_VERSION:=//p' "$makefile")"
+          current_release="$(sed -n 's/^PKG_RELEASE:=//p' "$makefile")"
+          current_source_version="$(sed -n 's/^PKG_SOURCE_VERSION:=//p' "$makefile")"
+
+          latest_tag="$(git -C upstream-kixdns tag --merged HEAD --sort=-v:refname | sed -n '1p')"
+          if [ -z "$latest_tag" ]; then
+            echo "No upstream tag found" >&2
+            exit 1
+          fi
+
+          latest_version="${latest_tag#v}"
+          latest_source_version="$(git -C upstream-kixdns rev-parse HEAD)"
+          latest_short_version="$(git -C upstream-kixdns rev-parse --short=7 HEAD)"
+          commit_timestamp="$(git -C upstream-kixdns log -n 1 --format=%ct)"
+          source_date="$(date -u -d "@${commit_timestamp}" +%Y-%m-%d)"
+
+          if [ "$current_version" != "$latest_version" ]; then
+            latest_release=1
+          elif [ "$current_source_version" != "$latest_source_version" ]; then
+            if ! [[ "$current_release" =~ ^[0-9]+$ ]]; then
+              echo "Invalid PKG_RELEASE: $current_release" >&2
+              exit 1
+            fi
+            latest_release=$((current_release + 1))
+          else
+            latest_release="$current_release"
+          fi
+
+          work_dir="$(mktemp -d)"
+          trap 'rm -rf "$work_dir"' EXIT
+          source_dir="kixdns-${latest_version}"
+          mkdir -p "$work_dir/$source_dir"
+          git -C upstream-kixdns archive --format=tar HEAD \
+            | tar -x -f - -C "$work_dir/$source_dir"
+          tar --numeric-owner --owner=0 --group=0 --mode=a-s --sort=name \
+            --mtime="@${commit_timestamp}" -C "$work_dir" -c "$source_dir" \
+            | zstd -q -T0 --ultra -20 -c > "$work_dir/$source_dir.tar.zst"
+          mirror_hash="$(sha256sum "$work_dir/$source_dir.tar.zst" | cut -d ' ' -f 1)"
+
+          {
+            echo "current_version=$current_version"
+            echo "current_release=$current_release"
+            echo "current_source_version=$current_source_version"
+            echo "latest_tag=$latest_tag"
+            echo "latest_version=$latest_version"
+            echo "latest_release=$latest_release"
+            echo "latest_source_version=$latest_source_version"
+            echo "latest_short_version=$latest_short_version"
+            echo "source_date=$source_date"
+            echo "mirror_hash=$mirror_hash"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update package Makefile
+        if: steps.info.outputs.current_version != steps.info.outputs.latest_version || steps.info.outputs.current_source_version != steps.info.outputs.latest_source_version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          makefile="luci-app-kixdns/kixdns/Makefile"
+          sed -i \
+            -e "s/^PKG_VERSION:=.*/PKG_VERSION:=${{ steps.info.outputs.latest_version }}/" \
+            -e "s/^PKG_RELEASE:=.*/PKG_RELEASE:=${{ steps.info.outputs.latest_release }}/" \
+            -e "s/^PKG_SOURCE_DATE:=.*/PKG_SOURCE_DATE:=${{ steps.info.outputs.source_date }}/" \
+            -e "s/^PKG_SOURCE_VERSION:=.*/PKG_SOURCE_VERSION:=${{ steps.info.outputs.latest_source_version }}/" \
+            -e "s/^PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=${{ steps.info.outputs.mirror_hash }}/" \
+            "$makefile"
+
+      - name: Create pull request
+        if: steps.info.outputs.current_version != steps.info.outputs.latest_version || steps.info.outputs.current_source_version != steps.info.outputs.latest_source_version
+        uses: peter-evans/create-pull-request@v8
+        with:
+          path: luci-app-kixdns
+          branch: dependabot/kixdns-core
+          delete-branch: true
+          commit-message: "chore: update kixdns core to ${{ steps.info.outputs.latest_short_version }}"
+          title: "chore: update kixdns core to ${{ steps.info.outputs.latest_short_version }}"
+          body: |
+            Update kixdns core from `${{ steps.info.outputs.current_source_version }}` to `${{ steps.info.outputs.latest_source_version }}`.
+
+            Package version: `${{ steps.info.outputs.latest_version }}-${{ steps.info.outputs.latest_release }}`
+
+            [Changelog](https://github.com/olicesx/kixdns/compare/${{ steps.info.outputs.current_source_version }}...${{ steps.info.outputs.latest_source_version }})
