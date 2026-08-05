@@ -28,7 +28,22 @@ One-click install on OpenWrt 24.10 or 25.12 (`x86_64`, `aarch64_generic`, or `aa
 wget -O - https://raw.githubusercontent.com/JohnsonRan/luci-app-kixdns/main/install.sh | sh
 ```
 
-This detects the OpenWrt release and architecture, downloads the matching latest [release](https://github.com/JohnsonRan/luci-app-kixdns/releases/latest), and installs the `.ipk` with `opkg` on OpenWrt 24.10 or the `.apk` with `apk` on OpenWrt 25.12. For other releases or targets, build from source below.
+The installer interactively offers two release channels:
+
+1. **stable** (default) — packages from the latest published [release](https://github.com/JohnsonRan/luci-app-kixdns/releases/latest).
+2. **rolling** — packages built from the latest successfully built `main` branch.
+
+For unattended installation, select the channel with `KIXDNS_RELEASE_TAG`:
+
+```sh
+# Stable
+wget -O - https://raw.githubusercontent.com/JohnsonRan/luci-app-kixdns/main/install.sh | KIXDNS_RELEASE_TAG=latest sh
+
+# Rolling
+wget -O - https://raw.githubusercontent.com/JohnsonRan/luci-app-kixdns/main/install.sh | KIXDNS_RELEASE_TAG=rolling sh
+```
+
+The script detects the OpenWrt release and architecture, then installs the `.ipk` with `opkg` on OpenWrt 24.10 or the `.apk` with `apk` on OpenWrt 25.12. If no interactive terminal is available and `KIXDNS_RELEASE_TAG` is unset, it defaults to stable. For other releases or targets, build from source below.
 
 ## Building
 

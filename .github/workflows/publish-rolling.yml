@@ -1,0 +1,178 @@
+name: Publish rolling release
+
+on:
+  workflow_run:
+    workflows:
+      - Build OpenWrt packages
+    branches:
+      - main
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Publish latest successful main build
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push')
+    concurrency:
+      group: publish-rolling-release
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Select latest successful build
+        id: source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          source_run="$(gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/build.yml/runs?branch=main&event=push&status=success&per_page=100" |
+            jq -r '[.[].workflow_runs[]] | max_by(.run_number) | select(.id != null) | [.id, .head_sha] | @tsv')"
+          if [ -z "$source_run" ]; then
+            echo "No successful main push build is available" >&2
+            exit 1
+          fi
+
+          IFS=$'\t' read -r source_run_id source_sha <<< "$source_run"
+          echo "run_id=$source_run_id" >> "$GITHUB_OUTPUT"
+          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "Selected build run $source_run_id for commit $source_sha"
+
+      - name: Download build artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          gh run download "$SOURCE_RUN_ID" \
+            --pattern 'kixdns_*' \
+            --dir release-artifacts
+
+      - name: Publish rolling packages
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run_id }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob globstar
+
+          assets=(release-artifacts/**/*.tar.gz)
+          if [ "${#assets[@]}" -ne 6 ]; then
+            echo "Expected 6 rolling release assets, found ${#assets[@]}" >&2
+            printf '  %s\n' "${assets[@]}" >&2
+            exit 1
+          fi
+
+          expected_assets="$(printf '%s\n' "${assets[@]##*/}" | sort -u)"
+          if [ "$(printf '%s\n' "$expected_assets" | wc -l)" -ne 6 ]; then
+            echo "Rolling build contains duplicate asset names" >&2
+            printf '%s\n' "$expected_assets" >&2
+            exit 1
+          fi
+
+          short_sha="${SOURCE_SHA:0:7}"
+          notes_file="${RUNNER_TEMP}/rolling-release-notes.md"
+          cat > "$notes_file" <<EOF
+          Rolling packages built from [\`${SOURCE_SHA}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${SOURCE_SHA}).
+
+          - OpenWrt versions: 24.10 and 25.12
+          - Architectures: x86_64, aarch64_generic and aarch64_cortex-a53
+          - [Build workflow run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID})
+
+          This prerelease is updated automatically after relevant changes are merged into \`main\`.
+          EOF
+
+          release_exists=false
+          if gh release view rolling >/dev/null 2>&1; then
+            release_exists=true
+          fi
+
+          if current_rolling_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/rolling" --jq .sha 2>/dev/null)"; then
+            compare_status="$(gh api \
+              "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${current_rolling_sha}" \
+              --jq .status)"
+            case "$compare_status" in
+              ahead)
+                echo "Skipping rolling publication because $current_rolling_sha is newer than $SOURCE_SHA"
+                exit 0
+                ;;
+              identical|behind) ;;
+              *)
+                echo "Cannot safely update rolling: commit comparison returned $compare_status" >&2
+                exit 1
+                ;;
+            esac
+          fi
+
+          set_rolling_ref() {
+            if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/rolling" >/dev/null 2>&1; then
+              gh api --method PATCH \
+                "repos/${GITHUB_REPOSITORY}/git/refs/tags/rolling" \
+                -f sha="$SOURCE_SHA" \
+                -F force=true >/dev/null
+            else
+              gh api --method POST \
+                "repos/${GITHUB_REPOSITORY}/git/refs" \
+                -f ref="refs/tags/rolling" \
+                -f sha="$SOURCE_SHA" >/dev/null
+            fi
+          }
+
+          if [ "$release_exists" = true ]; then
+            mapfile -t existing_assets < <(
+              gh release view rolling --json assets --jq '.assets[].name'
+            )
+            for asset_name in "${existing_assets[@]}"; do
+              gh release delete-asset rolling "$asset_name" --yes
+            done
+
+            gh release upload rolling "${assets[@]}"
+            gh release edit rolling \
+              --title "Rolling build (${short_sha})" \
+              --notes-file "$notes_file" \
+              --prerelease
+            set_rolling_ref
+          else
+            set_rolling_ref
+            gh release create rolling "${assets[@]}" \
+              --verify-tag \
+              --title "Rolling build (${short_sha})" \
+              --notes-file "$notes_file" \
+              --prerelease \
+              --latest=false
+          fi
+
+          published_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/rolling" --jq .object.sha)"
+          if [ "$published_sha" != "$SOURCE_SHA" ]; then
+            echo "Rolling tag points to $published_sha instead of $SOURCE_SHA" >&2
+            exit 1
+          fi
+
+          published_assets="$(gh release view rolling --json assets --jq '.assets[].name' | sort)"
+          if [ "$published_assets" != "$expected_assets" ]; then
+            echo "Rolling release assets do not match the selected build" >&2
+            diff -u <(printf '%s\n' "$expected_assets") <(printf '%s\n' "$published_assets") || true
+            exit 1
+          fi
+
+          is_prerelease="$(gh release view rolling --json isPrerelease --jq .isPrerelease)"
+          if [ "$is_prerelease" != true ]; then
+            echo "Rolling release is not marked as a prerelease" >&2
+            exit 1
+          fi

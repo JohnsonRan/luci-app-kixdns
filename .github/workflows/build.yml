@@ -2,6 +2,13 @@ name: Build OpenWrt packages
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "kixdns/**"
+      - "luci-app-kixdns/**"
+      - ".github/workflows/build.yml"
   release:
     types:
       - published

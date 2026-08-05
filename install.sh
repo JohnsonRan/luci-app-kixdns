@@ -1,10 +1,58 @@
 #!/bin/sh
 # luci-app-kixdns one-click installer
-# Downloads the latest prebuilt release and installs it with opkg or apk.
+# Downloads a stable or rolling prebuilt release and installs it with opkg or apk.
 
 set -e
 
 REPO="JohnsonRan/luci-app-kixdns"
+
+release_tag="${KIXDNS_RELEASE_TAG:-}"
+if [ -z "$release_tag" ]; then
+	if (exec </dev/tty) 2>/dev/null; then
+		while :; do
+			{
+				echo "Select a release channel:"
+				echo "  1) stable  - latest published release"
+				echo "  2) rolling - latest successful main branch build"
+				printf "Choice [1]: "
+			} >/dev/tty
+
+			if ! IFS= read -r choice </dev/tty; then
+				choice=1
+			fi
+
+			case "$choice" in
+				""|1|stable|latest)
+					release_tag=latest
+					break
+					;;
+				2|rolling)
+					release_tag=rolling
+					break
+					;;
+				*) echo "invalid choice: $choice" >/dev/tty ;;
+			esac
+		done
+	else
+		release_tag=latest
+		echo "no interactive terminal detected; using the stable release channel"
+	fi
+fi
+
+case "$release_tag" in
+	latest)
+		release_channel=stable
+		release_base_url="https://github.com/$REPO/releases/latest/download"
+		;;
+	rolling)
+		release_channel=rolling
+		release_base_url="https://github.com/$REPO/releases/download/rolling"
+		;;
+	*)
+		echo "unsupported release tag: $release_tag (supported: latest and rolling)" >&2
+		exit 1
+		;;
+esac
 
 [ -f /etc/openwrt_release ] || {
 	echo "/etc/openwrt_release not found, is this OpenWrt?" >&2
@@ -57,12 +105,12 @@ else
 fi
 
 asset="kixdns_${arch}-openwrt-${asset_release}.tar.gz"
-url="https://github.com/$REPO/releases/latest/download/$asset"
+url="$release_base_url/$asset"
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT INT TERM
 
-echo "downloading $asset..."
+echo "downloading $asset from the $release_channel release channel..."
 if ! fetch "$tmpdir/$asset" "$url"; then
 	echo "failed to download $asset" >&2
 	echo "no prebuilt package available for OpenWrt $asset_release on architecture $arch" >&2
