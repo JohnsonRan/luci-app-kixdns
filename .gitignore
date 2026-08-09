@@ -1,0 +1,5 @@
+.cache/
+.pi/
+.pi-subagents/
+dist/
+kixdns/prebuilt/

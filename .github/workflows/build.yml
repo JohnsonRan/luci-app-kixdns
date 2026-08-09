@@ -8,171 +8,145 @@ on:
     paths:
       - "kixdns/**"
       - "luci-app-kixdns/**"
+      - "Justfile"
       - ".github/workflows/build.yml"
   release:
     types:
       - published
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 jobs:
-  build-24-10:
-    name: Build ${{ matrix.arch }}
+  build-core:
+    name: Build core ${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         arch:
           - x86_64
-          - aarch64_generic
-          - aarch64_cortex-a53
+          - aarch64
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
+        uses: actions/checkout@v7
 
-      - name: Cache Rust build data
+      - name: Install Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install just
+        uses: extractions/setup-just@v4
+
+      - name: Cache core build data
         uses: actions/cache@v6
         with:
-          path: ${{ runner.temp }}/openwrt-rust-cache
-          key: openwrt-rust-v3-${{ runner.os }}-${{ matrix.arch }}-24.10
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            .cache/kixdns-core/target/${{ matrix.arch }}
+            .cache/kixdns-core/zigbuild
+          key: zigbuild-v3-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('kixdns/Makefile', 'Justfile') }}
           restore-keys: |
-            openwrt-rust-v3-${{ runner.os }}-${{ matrix.arch }}-24.10
+            zigbuild-v3-${{ runner.os }}-${{ matrix.arch }}-
 
-      - name: Build packages
-        # this fork enabled download-ci-llvm
-        uses: JohnsonRan/openwrt-gh-action-sdk@main
-        env:
-          ARCH: ${{ matrix.arch }}-openwrt-24.10
-          FEEDNAME: kixdns
-          PACKAGES: kixdns luci-app-kixdns
-          NO_REFRESH_CHECK: true
-          RUST_CACHE_DIR: ${{ runner.temp }}/openwrt-rust-cache
+      - name: Install core build toolchain
+        run: just setup-ci
 
-      - name: Package build output
-        shell: bash
-        run: |
-          set -euo pipefail
+      - name: Build static musl binary
+        run: just core-build "${{ matrix.arch }}"
 
-          package_dir="bin/packages/${{ matrix.arch }}/kixdns"
-          package_ext="ipk"
-          output="kixdns_${{ matrix.arch }}-openwrt-24.10.tar.gz"
-          staging_dir="$(mktemp -d)"
-          trap 'rm -rf "$staging_dir"' EXIT
+      - name: Verify static binary
+        run: just core-verify "${{ matrix.arch }}"
 
-          find_package() {
-            find "$package_dir" -maxdepth 1 -type f \
-              \( -name "$1-*.${package_ext}" -o -name "$1_*.${package_ext}" \) \
-              -print -quit
-          }
-
-          core_package="$(find_package kixdns)"
-          luci_package="$(find_package luci-app-kixdns)"
-
-          if [ -z "$core_package" ] || [ -z "$luci_package" ]; then
-            echo "Expected kixdns and luci-app-kixdns .${package_ext} packages in $package_dir" >&2
-            find "$package_dir" -maxdepth 1 -type f -print >&2 || true
-            exit 1
-          fi
-
-          cp "$core_package" "$luci_package" "$staging_dir/"
-          tar -czf "$output" -C "$staging_dir" .
-
-      - name: Upload build artifact
+      - name: Upload core binary
         uses: actions/upload-artifact@v7
         with:
-          name: kixdns_${{ matrix.arch }}-openwrt-24.10
-          path: kixdns_${{ matrix.arch }}-openwrt-24.10.tar.gz
+          name: kixdns-core-${{ matrix.arch }}
+          path: dist/core/kixdns-${{ matrix.arch }}
           if-no-files-found: error
+          retention-days: 1
 
-  build-25-12:
-    name: Build ${{ matrix.arch }}
+  build-packages:
+    name: Build OpenWrt ${{ matrix.release.name }} / ${{ matrix.arch.name }}
+    needs: build-core
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        release:
+          - name: "24.10"
+            sdk: openwrt-24.10
+            package_ext: ipk
+          - name: "25.12"
+            sdk: master
+            package_ext: apk
         arch:
-          - x86_64
-          - aarch64_generic
-          - aarch64_cortex-a53
+          - name: x86_64
+            core: x86_64
+          - name: aarch64_generic
+            core: aarch64
+          - name: aarch64_cortex-a53
+            core: aarch64
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Cache Rust build data
-        uses: actions/cache@v6
+      - name: Install just
+        uses: extractions/setup-just@v4
+
+      - name: Download prebuilt core
+        uses: actions/download-artifact@v8
         with:
-          path: ${{ runner.temp }}/openwrt-rust-cache
-          key: openwrt-rust-v3-${{ runner.os }}-${{ matrix.arch }}-master
-          restore-keys: |
-            openwrt-rust-v3-${{ runner.os }}-${{ matrix.arch }}-master
+          name: kixdns-core-${{ matrix.arch.core }}
+          path: kixdns/prebuilt
+
+      - name: Prepare prebuilt core
+        run: just core-stage "${{ matrix.arch.core }}"
 
       - name: Build packages
-        # this fork enabled download-ci-llvm
-        uses: JohnsonRan/openwrt-gh-action-sdk@main
+        uses: openwrt/gh-action-sdk@main
         env:
-          ARCH: ${{ matrix.arch }}-master
+          ARCH: ${{ matrix.arch.name }}-${{ matrix.release.sdk }}
           FEEDNAME: kixdns
           PACKAGES: kixdns luci-app-kixdns
           NO_REFRESH_CHECK: true
-          RUST_CACHE_DIR: ${{ runner.temp }}/openwrt-rust-cache
 
       - name: Package build output
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          package_dir="bin/packages/${{ matrix.arch }}/kixdns"
-          package_ext="apk"
-          output="kixdns_${{ matrix.arch }}-openwrt-25.12.tar.gz"
-          staging_dir="$(mktemp -d)"
-          trap 'rm -rf "$staging_dir"' EXIT
-
-          find_package() {
-            find "$package_dir" -maxdepth 1 -type f \
-              \( -name "$1-*.${package_ext}" -o -name "$1_*.${package_ext}" \) \
-              -print -quit
-          }
-
-          core_package="$(find_package kixdns)"
-          luci_package="$(find_package luci-app-kixdns)"
-
-          if [ -z "$core_package" ] || [ -z "$luci_package" ]; then
-            echo "Expected kixdns and luci-app-kixdns .${package_ext} packages in $package_dir" >&2
-            find "$package_dir" -maxdepth 1 -type f -print >&2 || true
-            exit 1
-          fi
-
-          cp "$core_package" "$luci_package" "$staging_dir/"
-          tar -czf "$output" -C "$staging_dir" .
+        run: >-
+          just package-output
+          "${{ matrix.arch.name }}"
+          "${{ matrix.release.name }}"
+          "${{ matrix.release.package_ext }}"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: kixdns_${{ matrix.arch }}-openwrt-25.12
-          path: kixdns_${{ matrix.arch }}-openwrt-25.12.tar.gz
+          name: kixdns_${{ matrix.arch.name }}-openwrt-${{ matrix.release.name }}
+          path: kixdns_${{ matrix.arch.name }}-openwrt-${{ matrix.release.name }}.tar.gz
           if-no-files-found: error
 
   upload-release:
     name: Attach packages to release
     if: github.event_name == 'release'
-    needs:
-      - build-24-10
-      - build-25-12
+    needs: build-packages
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
 
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: kixdns_*
           path: release-assets

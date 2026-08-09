@@ -20,12 +20,12 @@ jobs:
 
     steps:
       - name: Check out package repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: luci-app-kixdns
 
       - name: Check out kixdns upstream
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: olicesx/kixdns
           ref: main
@@ -108,6 +108,52 @@ jobs:
             -e "s/^PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=${{ steps.info.outputs.mirror_hash }}/" \
             "$makefile"
 
+      - id: pr-metadata
+        name: Preserve pull request title and description
+        if: steps.info.outputs.current_version != steps.info.outputs.latest_version || steps.info.outputs.current_source_version != steps.info.outputs.latest_source_version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CURRENT_SOURCE_VERSION: ${{ steps.info.outputs.current_source_version }}
+          LATEST_VERSION: ${{ steps.info.outputs.latest_version }}
+          LATEST_RELEASE: ${{ steps.info.outputs.latest_release }}
+          LATEST_SOURCE_VERSION: ${{ steps.info.outputs.latest_source_version }}
+          LATEST_SHORT_VERSION: ${{ steps.info.outputs.latest_short_version }}
+        run: |
+          set -euo pipefail
+
+          body_path="${RUNNER_TEMP}/kixdns-core-pr.md"
+          existing_pr="$(gh pr list \
+            --state open \
+            --head dependabot/kixdns-core \
+            --json number \
+            --jq '.[0].number // empty')"
+
+          if [ -n "$existing_pr" ]; then
+            metadata="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${existing_pr}")"
+            title="$(jq -r .title <<< "$metadata")"
+            body_base64="$(jq -r '(.body // "") | @base64' <<< "$metadata")"
+            printf '%s' "$body_base64" | base64 --decode > "$body_path"
+            echo "Preserving metadata from pull request #$existing_pr"
+          else
+            title="chore: update kixdns core to ${LATEST_SHORT_VERSION}"
+            cat > "$body_path" <<EOF
+          Update kixdns core from \`${CURRENT_SOURCE_VERSION}\` to \`${LATEST_SOURCE_VERSION}\`.
+
+          Package version: \`${LATEST_VERSION}-${LATEST_RELEASE}\`
+
+          [Changelog](https://github.com/olicesx/kixdns/compare/${CURRENT_SOURCE_VERSION}...${LATEST_SOURCE_VERSION})
+          EOF
+          fi
+
+          {
+            echo "title<<EOF"
+            echo "$title"
+            echo "EOF"
+            echo "body_path=$body_path"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create pull request
         if: steps.info.outputs.current_version != steps.info.outputs.latest_version || steps.info.outputs.current_source_version != steps.info.outputs.latest_source_version
         uses: peter-evans/create-pull-request@v8
@@ -116,10 +162,5 @@ jobs:
           branch: dependabot/kixdns-core
           delete-branch: true
           commit-message: "chore: update kixdns core to ${{ steps.info.outputs.latest_short_version }}"
-          title: "chore: update kixdns core to ${{ steps.info.outputs.latest_short_version }}"
-          body: |
-            Update kixdns core from `${{ steps.info.outputs.current_source_version }}` to `${{ steps.info.outputs.latest_source_version }}`.
-
-            Package version: `${{ steps.info.outputs.latest_version }}-${{ steps.info.outputs.latest_release }}`
-
-            [Changelog](https://github.com/olicesx/kixdns/compare/${{ steps.info.outputs.current_source_version }}...${{ steps.info.outputs.latest_source_version }})
+          title: ${{ steps.pr-metadata.outputs.title }}
+          body-path: ${{ steps.pr-metadata.outputs.body_path }}

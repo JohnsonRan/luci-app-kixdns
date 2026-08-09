@@ -57,6 +57,40 @@ make package/kixdns/compile package/luci-app-kixdns/compile V=s
 
 The core package requires the Rust host toolchain from `feeds/packages/lang/rust`.
 
+### Local core builds with Zig
+
+For a faster local cross-compilation workflow, the root `Justfile` can fetch the
+exact KixDNS revision pinned by `kixdns/Makefile` and build static musl binaries
+with `cargo-zigbuild`:
+
+```sh
+# Install cargo-zigbuild and its bundled Zig toolchain, then verify the setup.
+just setup
+just doctor
+
+# Build one target or both binary architectures used by this repository.
+just core-build x86_64
+just core-build aarch64
+just core-build-all
+```
+
+Generated binaries are written to `dist/core/`, while source and compiler caches
+stay under `.cache/kixdns-core/`.
+
+These commands are optional and are not part of a normal OpenWrt buildroot
+build. When this repository is included as a package or feed, use the standard
+OpenWrt `make` commands shown above; without a CI-provided prebuilt binary, the
+package automatically compiles the pinned source through `rust-package.mk`.
+
+The release workflow uses the same approach: it compiles one x86_64 and one
+generic ARM64 static musl binary, verifies that they have no ELF interpreter or
+dynamic dependencies, and passes them to both OpenWrt SDK builds. The same ARM64
+binary is wrapped separately as `aarch64_generic` and `aarch64_cortex-a53` so the
+package metadata matches each OpenWrt target. The SDK therefore only packages the
+core and builds the LuCI files; it no longer compiles Rust once for every OpenWrt
+release. Keeping the final packaging in the SDK also guarantees native OpenWrt
+`ipk` metadata and the APK v3 format required by OpenWrt 25.12.
+
 ## Paths
 
 - Pipeline configuration: `/etc/kixdns/pipeline.json`
