@@ -56,14 +56,8 @@ jobs:
           restore-keys: |
             zigbuild-v3-${{ runner.os }}-${{ matrix.arch }}-
 
-      - name: Install core build toolchain
-        run: just setup-ci
-
-      - name: Build static musl binary
-        run: just core-build "${{ matrix.arch }}"
-
-      - name: Verify static binary
-        run: just core-verify "${{ matrix.arch }}"
+      - name: Build and verify static musl binary
+        run: just core-build-ci "${{ matrix.arch }}"
 
       - name: Upload core binary
         uses: actions/upload-artifact@v7

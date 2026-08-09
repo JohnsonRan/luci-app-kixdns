@@ -31,15 +31,11 @@ include $(INCLUDE_DIR)/package.mk
 ifeq ($(KIXDNS_USE_PREBUILT),)
 include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
 
-KIXDNS_ARCH_DEPENDS:=$(RUST_ARCH_DEPENDS)
-
 # aws-lc-sys runs C compiler probes during its build script. Force those probes
 # onto OpenWrt's target compiler instead of rust-package.mk's host CC.
 KIXDNS_AWS_LC_CC_ENV:=AWS_LC_SYS_CC_$(subst -,_,$(RUSTC_TARGET_ARCH))
 CARGO_PKG_VARS += $(KIXDNS_AWS_LC_CC_ENV)=$(TARGET_CC_NOCACHE)
 else
-KIXDNS_ARCH_DEPENDS:=
-
 # No source archive or Rust toolchain is needed when CI supplied the binary.
 define Build/Prepare
 	rm -rf $(PKG_BUILD_DIR)
@@ -58,7 +54,7 @@ define Package/kixdns
   SUBMENU:=IP Addresses and Names
   TITLE:=High-performance non-recursive DNS forwarding server
   URL:=https://github.com/olicesx/kixdns
-  DEPENDS:=$(KIXDNS_ARCH_DEPENDS)
+  DEPENDS:=$(if $(KIXDNS_USE_PREBUILT),,$(RUST_ARCH_DEPENDS))
 endef
 
 define Package/kixdns/description

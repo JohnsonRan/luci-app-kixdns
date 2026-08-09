@@ -71,9 +71,13 @@ core-build arch="x86_64": doctor core-fetch
     echo "Created {{dist_dir}}/kixdns-{{arch}}"
 
 # Build the two binaries used by all published OpenWrt package architectures.
-core-build-all:
-    just core-build x86_64
-    just core-build aarch64
+core-build-all: (core-build "x86_64") (core-build "aarch64")
+
+# Install, build, and verify one core target in CI.
+core-build-ci arch:
+    just setup-ci
+    just core-build "{{arch}}"
+    just core-verify "{{arch}}"
 
 # Verify the ELF architecture and static linkage of a built core binary.
 core-verify arch="x86_64":
