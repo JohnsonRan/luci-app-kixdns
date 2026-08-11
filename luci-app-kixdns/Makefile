@@ -9,7 +9,7 @@ PKG_RELEASE:=1
 
 LUCI_TITLE:=LuCI Support for KixDNS
 LUCI_DESCRIPTION:=LuCI interface for KixDNS - a high-performance DNS forwarding server
-LUCI_DEPENDS:=+kixdns +jsonfilter +kmod-nft-nat
+LUCI_DEPENDS:=+kixdns +jsonfilter +kmod-nft-nat +curl
 LUCI_PKGARCH:=all
 
 # Do NOT let luci.mk run csstidy/jsmin over htdocs at build time.
