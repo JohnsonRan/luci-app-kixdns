@@ -212,7 +212,7 @@ return view.extend({
 			E('style', {}, css),
 			E('h2', {}, _('KixDNS - Log')),
 			E('div', { 'class': 'cbi-map-descr' },
-				_('Log file: %s (cleared on service start if oversized, kept out of the system log).').format('<code>' + escapeHTML(LOGFILE) + '</code>')),
+				_('Log file: %s').format('<code>' + escapeHTML(LOGFILE) + '</code>')),
 			E('div', { 'class': 'cbi-section' }, [
 				E('div', { 'style': 'display:flex;align-items:center;gap:.75em;flex-wrap:wrap;margin-bottom:.5em' }, [
 					filterInput,

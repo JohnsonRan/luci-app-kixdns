@@ -4,9 +4,7 @@ msgstr "Content-Type: text/plain; charset=UTF-8"
 msgid "KixDNS"
 msgstr ""
 
-msgid ""
-"KixDNS is a high-performance, non-recursive DNS forwarding server. Edit the "
-"pipeline rules in the \"Config Editor\" tab."
+msgid "KixDNS is an asynchronous, non-recursive DNS forwarding server written in Rust."
 msgstr ""
 
 msgid "Overview"
@@ -56,7 +54,7 @@ msgstr ""
 
 msgid ""
 "Redirect all DNS requests (port 53, UDP/TCP) from LAN clients to KixDNS via "
-"nftables. The redirect target port is taken from \"bind_udp\" in the "
+"nftables. The redirect target port is taken from <code>bind_udp</code> in the "
 "pipeline config."
 msgstr ""
 
@@ -79,7 +77,7 @@ msgid "GeoIP download URL"
 msgstr ""
 
 msgid ""
-"Download a V2Ray GeoIP database to /etc/kixdns/geoip.dat before each service "
+"Download a V2Ray GeoIP database to <code>/etc/kixdns/geoip.dat</code> before each service "
 "start. Leave empty to disable downloading."
 msgstr ""
 
@@ -87,7 +85,7 @@ msgid "Configuration download URL"
 msgstr ""
 
 msgid ""
-"KixDNS always uses the local /etc/kixdns/pipeline.json. The remote file is "
+"KixDNS always uses the local <code>/etc/kixdns/pipeline.json</code>. The remote file is "
 "downloaded only when you click \"Update configuration\"."
 msgstr ""
 
@@ -96,8 +94,8 @@ msgstr ""
 
 msgid ""
 "Download from the URL above, validate the JSON, and replace the local "
-"configuration now. The previous local file is kept as "
-"/etc/kixdns/pipeline.json.bak."
+"configuration now. The original file is kept as "
+"<code>/etc/kixdns/pipeline.json.bak</code>."
 msgstr ""
 
 msgid "Update configuration"
@@ -127,10 +125,10 @@ msgstr ""
 msgid "Configuration saved."
 msgstr ""
 
-msgid "Log filter (RUST_LOG)"
+msgid "Log filter"
 msgstr ""
 
-msgid "Tracing filter passed via the RUST_LOG environment variable."
+msgid "Tracing filter passed via the <code>RUST_LOG</code> environment variable."
 msgstr ""
 
 msgid "Errors + matcher logs (recommended)"
@@ -246,7 +244,5 @@ msgstr ""
 msgid "Clear log"
 msgstr ""
 
-msgid ""
-"Log file: %s (cleared on service start if oversized, kept out of the system "
-"log)."
+msgid "Log file: %s"
 msgstr ""

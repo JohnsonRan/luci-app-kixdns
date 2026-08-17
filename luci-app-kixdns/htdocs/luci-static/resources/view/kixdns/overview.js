@@ -97,8 +97,7 @@ return view.extend({
 		catch (e) { /* unreadable or invalid pipeline config */ }
 
 		m = new form.Map('kixdns', _('KixDNS'),
-			_('KixDNS is a high-performance, non-recursive DNS forwarding server. ' +
-			  'Edit the pipeline rules in the "Config Editor" tab.'));
+			_('KixDNS is an asynchronous, non-recursive DNS forwarding server written in Rust.'));
 
 		s = m.section(form.NamedSection, '_status');
 		s.anonymous = true;
@@ -160,7 +159,7 @@ return view.extend({
 
 		o = s.option(form.Flag, 'hijack', _('DNS Hijack'),
 			_('Redirect all DNS requests (port 53, UDP/TCP) from LAN clients to KixDNS via nftables. ' +
-			  'The redirect target port is taken from "bind_udp" in the pipeline config.'));
+			  'The redirect target port is taken from <code>bind_udp</code> in the pipeline config.'));
 		o.rmempty = false;
 
 		o = s.option(form.Value, 'listener_label', _('Listener label'),
@@ -174,20 +173,20 @@ return view.extend({
 		o.placeholder = _('auto');
 
 		o = s.option(form.Value, 'geoip_download_url', _('GeoIP download URL'),
-			_('Download a V2Ray GeoIP database to /etc/kixdns/geoip.dat before each service start. ' +
+			_('Download a V2Ray GeoIP database to <code>/etc/kixdns/geoip.dat</code> before each service start. ' +
 			  'Leave empty to disable downloading.'));
 		o.datatype = 'url';
 		o.placeholder = 'https://example.com/geoip.dat';
 
 		configUrlOption = s.option(form.Value, 'config_download_url', _('Configuration download URL'),
-			_('KixDNS always uses the local /etc/kixdns/pipeline.json. The remote file is downloaded ' +
+			_('KixDNS always uses the local <code>/etc/kixdns/pipeline.json</code>. The remote file is downloaded ' +
 			  'only when you click "Update configuration".'));
 		configUrlOption.datatype = 'url';
 		configUrlOption.placeholder = 'https://example.com/pipeline.json';
 
 		o = s.option(form.Button, '_update_config', _('Remote configuration'),
 			_('Download from the URL above, validate the JSON, and replace the local configuration now. ' +
-			  'The previous local file is kept as /etc/kixdns/pipeline.json.bak.'));
+			  'The original file is kept as <code>/etc/kixdns/pipeline.json.bak</code>.'));
 		o.inputtitle = _('Update configuration');
 		o.inputstyle = 'apply';
 		o.depends('config_download_url', /.+/);
@@ -221,8 +220,8 @@ return view.extend({
 				});
 		};
 
-		o = s.option(form.Value, 'rust_log', _('Log filter (RUST_LOG)'),
-			_('Tracing filter passed via the RUST_LOG environment variable.'));
+		o = s.option(form.Value, 'rust_log', _('Log filter'),
+			_('Tracing filter passed via the <code>RUST_LOG</code> environment variable.'));
 		o.default = 'error,kixdns::engine::matcher_adapter=info';
 		o.value('error,kixdns::engine::matcher_adapter=info', _('Errors + matcher logs (recommended)'));
 		o.value('error', _('Errors only'));
