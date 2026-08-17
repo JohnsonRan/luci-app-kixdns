@@ -10,7 +10,8 @@
 				"/etc/kixdns": [ "list" ],
 				"/etc/kixdns/*": [ "read" ],
 				"/tmp/kixdns.log": [ "read" ],
-				"/usr/libexec/kixdns-tail-log": [ "exec" ]
+				"/usr/libexec/kixdns-tail-log": [ "exec" ],
+				"/usr/libexec/kixdns-status": [ "exec" ]
 			},
 			"uci": [ "kixdns" ]
 		},

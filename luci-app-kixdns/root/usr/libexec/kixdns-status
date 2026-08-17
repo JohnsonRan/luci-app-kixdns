@@ -1,0 +1,47 @@
+#!/bin/sh
+
+LC_ALL=C
+export LC_ALL
+
+state=/tmp/kixdns-resource.state
+version="$(/usr/bin/kixdns --version 2>/dev/null | awk 'NR == 1 { print $NF; exit }' | tr -cd 'A-Za-z0-9._+-')"
+pid="$(pidof kixdns 2>/dev/null | awk '{ print $1 }')"
+
+if [ -z "$pid" ] || [ ! -r "/proc/$pid/stat" ]; then
+	rm -f "$state"
+	printf '{"cpu":0,"memory":0,"runtime":0,"version":"%s"}\n' "$version"
+	exit 0
+fi
+
+stat="$(cat "/proc/$pid/stat" 2>/dev/null)"
+set -- ${stat##*) }
+ticks=$((${12:-0} + ${13:-0}))
+started=${20:-0}
+uptime="$(awk '{ print $1 }' /proc/uptime)"
+rss_kb="$(awk '/^VmRSS:/ { print $2; exit }' "/proc/$pid/status")"
+hz="$(getconf CLK_TCK 2>/dev/null || printf 100)"
+case "$hz" in ''|*[!0-9]*|0) hz=100 ;; esac
+runtime=$((${uptime%%.*} - started / hz))
+[ "$runtime" -ge 0 ] 2>/dev/null || runtime=0
+
+old_pid=
+old_ticks=
+old_uptime=
+[ -r "$state" ] && read -r old_pid old_ticks old_uptime < "$state"
+
+cpu="$(awk -v pid="$pid" -v old_pid="$old_pid" -v ticks="$ticks" \
+	-v old_ticks="$old_ticks" -v now="$uptime" -v old_now="$old_uptime" \
+	-v started="$started" -v hz="$hz" 'BEGIN {
+	if (pid == old_pid && now > old_now && ticks >= old_ticks)
+		value = 100 * (ticks - old_ticks) / hz / (now - old_now)
+	else if (now > started / hz)
+		value = 100 * ticks / hz / (now - started / hz)
+	else
+		value = 0
+	printf "%.1f", value
+}')"
+
+printf '%s %s %s\n' "$pid" "$ticks" "$uptime" > "$state.$$" && mv -f "$state.$$" "$state"
+awk -v cpu="$cpu" -v rss="${rss_kb:-0}" -v runtime="$runtime" -v version="$version" 'BEGIN {
+	printf "{\"cpu\":%.1f,\"memory\":%.1f,\"runtime\":%d,\"version\":\"%s\"}\n", cpu, rss / 1024, runtime, version
+}'

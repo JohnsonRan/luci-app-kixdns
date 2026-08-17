@@ -875,7 +875,7 @@
                     </select>
 
                     <!-- Static IP -->
-                    <input v-if="a.type === 'static_ip_response'" type="text" class="form-control form-control-sm" style="max-width: 160px;" v-model="a.ip" placeholder="IP Address">
+                    <input v-if="a.type === 'static_ip_response'" type="text" class="form-control form-control-sm" style="max-width: 220px;" v-model="a.ip" placeholder="IP address(es), comma-separated">
 
                     <!-- Jump -->
                     <select v-if="a.type === 'jump_to_pipeline'" class="form-select form-select-sm" style="max-width: 180px;" v-model="a.pipeline">
@@ -1399,9 +1399,25 @@
                         delete obj.ecs_prefix_v4;
                         delete obj.ecs_prefix_v6;
                     };
+                    const serializeMatcherCountryCodes = (items) => {
+                        (items || []).forEach(matcher => {
+                            if (!Object.prototype.hasOwnProperty.call(matcher, 'country_codes')) return;
+                            const values = Array.isArray(matcher.country_codes)
+                                ? matcher.country_codes
+                                : String(matcher.country_codes || '').split(',');
+                            matcher.country_codes = values
+                                .map(value => value.trim())
+                                .filter(value => value);
+                        });
+                    };
+                    (clean.pipeline_select || []).forEach(selector => {
+                        serializeMatcherCountryCodes(selector.matchers);
+                    });
                     (clean.pipelines || []).forEach(pipe => {
                         processEcs(pipe);
                         (pipe.rules || []).forEach(rule => {
+                            serializeMatcherCountryCodes(rule.matchers);
+                            serializeMatcherCountryCodes(rule.response_matchers);
                             [rule.actions, rule.response_actions_on_match, rule.response_actions_on_miss]
                                 .forEach(actions => (actions || []).forEach(a => {
                                     if (a.type === 'forward') processEcs(a);
@@ -1839,6 +1855,9 @@
                 const normalizeMatcherOps = (items) => {
                     (items || []).forEach(m => {
                         if (!m.operator) m.operator = DEFAULT_MATCH_OPERATOR;
+                        if (Array.isArray(m.country_codes)) {
+                            m.country_codes = m.country_codes.join(',');
+                        }
                     });
                 };
 

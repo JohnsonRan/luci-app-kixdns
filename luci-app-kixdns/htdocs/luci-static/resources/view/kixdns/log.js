@@ -43,6 +43,8 @@ function getRule(line) {
 
 /* Tokenize one log line into highlighted HTML */
 function highlightLine(line) {
+	line = line.replace(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/, '$1 $2');
+
 	var lvl = 'info';
 	var lm = /level="?(\w+)"?/.exec(line);
 	if (lm)
@@ -56,8 +58,8 @@ function highlightLine(line) {
 		/* optional syslog prefix: "Mon Jul 20 01:15:22 2026 daemon.info kixdns[1615]:" */
 		.replace(/^(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4}\s+\S+\s+kixdns\[\d+\]:)/,
 			'<span class="kx-syslog">$1</span>')
-		/* ISO timestamp */
-		.replace(/(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)/,
+		/* timestamp */
+		.replace(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/,
 			'<span class="kx-ts">$1</span>')
 		/* key=value tokens */
 		.replace(/\bevent=(&quot;[^&]*&quot;|\S+)/,

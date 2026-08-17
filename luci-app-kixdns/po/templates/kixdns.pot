@@ -24,6 +24,18 @@ msgstr ""
 msgid "Status"
 msgstr ""
 
+msgid "CPU Usage"
+msgstr ""
+
+msgid "Memory Usage"
+msgstr ""
+
+msgid "Runtime"
+msgstr ""
+
+msgid "Core Version"
+msgstr ""
+
 msgid "RUNNING"
 msgstr ""
 

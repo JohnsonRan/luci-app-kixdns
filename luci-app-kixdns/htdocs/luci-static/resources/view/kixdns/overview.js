@@ -7,6 +7,12 @@
 'require ui';
 
 var CONFFILE = '/etc/kixdns/pipeline.json';
+var statusCss = '\
+.kixdns-status-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.75em; margin:.75em 0 1em; } \
+.kixdns-status-item { padding:.75em 1em; border:1px solid rgba(127,127,127,.25); border-radius:4px; background:rgba(127,127,127,.06); } \
+.kixdns-status-label { display:block; margin-bottom:.3em; opacity:.7; font-size:.9em; } \
+.kixdns-status-value { font-size:1.15em; } \
+@media (max-width:800px) { .kixdns-status-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }';
 
 var callServiceList = rpc.declare({
 	object: 'service',
@@ -26,27 +32,65 @@ function getServiceStatus() {
 	});
 }
 
+function getResourceUsage() {
+	return L.resolveDefault(fs.exec('/usr/libexec/kixdns-status'), { stdout: '' }).then(function (res) {
+		try {
+			return JSON.parse(res.stdout || '');
+		}
+		catch (e) {
+			return { cpu: 0, memory: 0, runtime: 0, version: '' };
+		}
+	});
+}
+
 function renderStatus(running) {
 	return running
 		? E('span', { 'style': 'color:#2ea44f;font-weight:bold' }, _('RUNNING'))
 		: E('span', { 'style': 'color:#d73a49;font-weight:bold' }, _('NOT RUNNING'));
 }
 
+function formatCpu(running, usage) {
+	return running ? Number(usage.cpu || 0).toFixed(1) + '%' : '-';
+}
+
+function formatMemory(running, usage) {
+	return running ? Number(usage.memory || 0).toFixed(1) + ' MB' : '-';
+}
+
+function formatRuntime(running, usage) {
+	var seconds = Math.max(0, Number(usage.runtime || 0));
+	var days = Math.floor(seconds / 86400);
+	var hours = Math.floor(seconds % 86400 / 3600);
+	var minutes = Math.floor(seconds % 3600 / 60);
+	var secs = Math.floor(seconds % 60);
+	var clock = [ hours, minutes, secs ].map(function (value) {
+		return value < 10 ? '0' + value : String(value);
+	}).join(':');
+
+	return running ? (days ? days + 'd ' : '') + clock : '-';
+}
+
+function formatVersion(usage) {
+	return usage.version || '-';
+}
+
 return view.extend({
 	load: function () {
 		return Promise.all([
 			getServiceStatus(),
+			getResourceUsage(),
 			L.resolveDefault(fs.read(CONFFILE), '')
 		]);
 	},
 
 	render: function (data) {
 		var running = data[0];
+		var usage = data[1];
 		var binds = { udp: null, tcp: null };
 		var m, s, o, configUrlOption;
 
 		try {
-			var cfg = JSON.parse(data[1]);
+			var cfg = JSON.parse(data[2]);
 			binds.udp = (cfg.settings || {}).bind_udp;
 			binds.tcp = (cfg.settings || {}).bind_tcp;
 		}
@@ -60,19 +104,47 @@ return view.extend({
 		s.anonymous = true;
 		s.render = function () {
 			var statusNode = E('span', {}, renderStatus(running));
+			var cpuNode = E('span', {}, formatCpu(running, usage));
+			var memoryNode = E('span', {}, formatMemory(running, usage));
+			var runtimeNode = E('span', {}, formatRuntime(running, usage));
+			var versionNode = E('span', {}, formatVersion(usage));
 
 			poll.add(function () {
-				return getServiceStatus().then(function (r) {
-					running = r;
+				return Promise.all([ getServiceStatus(), getResourceUsage() ]).then(function (result) {
+					running = result[0];
+					usage = result[1];
 					while (statusNode.firstChild)
 						statusNode.removeChild(statusNode.firstChild);
-					statusNode.appendChild(renderStatus(r));
+					statusNode.appendChild(renderStatus(running));
+					cpuNode.textContent = formatCpu(running, usage);
+					memoryNode.textContent = formatMemory(running, usage);
+					runtimeNode.textContent = formatRuntime(running, usage);
+					versionNode.textContent = formatVersion(usage);
 				});
 			}, 5);
 
 			return E('div', { 'class': 'cbi-section' }, [
+				E('style', {}, statusCss),
 				E('h3', {}, _('Service Status')),
 				E('p', {}, [ _('Status'), ': ', statusNode ]),
+				E('div', { 'class': 'kixdns-status-grid' }, [
+					E('div', { 'class': 'kixdns-status-item' }, [
+						E('span', { 'class': 'kixdns-status-label' }, _('CPU Usage')),
+						E('strong', { 'class': 'kixdns-status-value' }, cpuNode)
+					]),
+					E('div', { 'class': 'kixdns-status-item' }, [
+						E('span', { 'class': 'kixdns-status-label' }, _('Memory Usage')),
+						E('strong', { 'class': 'kixdns-status-value' }, memoryNode)
+					]),
+					E('div', { 'class': 'kixdns-status-item' }, [
+						E('span', { 'class': 'kixdns-status-label' }, _('Runtime')),
+						E('strong', { 'class': 'kixdns-status-value' }, runtimeNode)
+					]),
+					E('div', { 'class': 'kixdns-status-item' }, [
+						E('span', { 'class': 'kixdns-status-label' }, _('Core Version')),
+						E('strong', { 'class': 'kixdns-status-value' }, versionNode)
+					])
+				]),
 				E('p', {}, [
 					_('Listening (from pipeline config)'), ': ',
 					E('code', {}, 'UDP ' + (binds.udp || '?') + ' / TCP ' + (binds.tcp || '?'))

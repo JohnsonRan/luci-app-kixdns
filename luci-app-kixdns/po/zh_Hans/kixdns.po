@@ -28,6 +28,18 @@ msgstr "服务状态"
 msgid "Status"
 msgstr "状态"
 
+msgid "CPU Usage"
+msgstr "CPU 占用"
+
+msgid "Memory Usage"
+msgstr "内存占用"
+
+msgid "Runtime"
+msgstr "运行时长"
+
+msgid "Core Version"
+msgstr "核心版本"
+
 msgid "RUNNING"
 msgstr "运行中"
 
