@@ -12,6 +12,7 @@ var statusCss = '\
 .kixdns-status-item { padding:.75em 1em; border:1px solid rgba(127,127,127,.25); border-radius:4px; background:rgba(127,127,127,.06); } \
 .kixdns-status-label { display:block; margin-bottom:.3em; opacity:.7; font-size:.9em; } \
 .kixdns-status-value { font-size:1.15em; } \
+.kixdns-service-actions { display:flex; gap:.5em; margin:.75em 0; } \
 @media (max-width:800px) { .kixdns-status-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }';
 
 var callServiceList = rpc.declare({
@@ -39,6 +40,15 @@ function getResourceUsage() {
 		}
 		catch (e) {
 			return { cpu: 0, memory: 0, runtime: 0, version: '' };
+		}
+	});
+}
+
+function runInitCommand(action) {
+	return fs.exec('/etc/init.d/kixdns', [ action ]).then(function (res) {
+		if (!res || res.code !== 0) {
+			var detail = String((res && (res.stderr || res.stdout)) || '').trim();
+			throw new Error(detail || _('Service action failed'));
 		}
 	});
 }
@@ -107,25 +117,70 @@ return view.extend({
 			var memoryNode = E('span', {}, formatMemory(running, usage));
 			var runtimeNode = E('span', {}, formatRuntime(running, usage));
 			var versionNode = E('span', {}, formatVersion(usage));
+			var startButton = E('button', {
+				'class': 'cbi-button cbi-button-positive',
+				'type': 'button'
+			}, _('Start'));
+			var restartButton = E('button', {
+				'class': 'cbi-button cbi-button-action',
+				'type': 'button'
+			}, _('Restart'));
+			var stopButton = E('button', {
+				'class': 'cbi-button cbi-button-negative',
+				'type': 'button'
+			}, _('Stop'));
+			var actionMessages = {
+				start: _('KixDNS started.'),
+				restart: _('KixDNS restarted.'),
+				stop: _('KixDNS stopped.')
+			};
 
-			poll.add(function () {
-				return Promise.all([ getServiceStatus(), getResourceUsage() ]).then(function (result) {
-					running = result[0];
-					usage = result[1];
-					while (statusNode.firstChild)
-						statusNode.removeChild(statusNode.firstChild);
-					statusNode.appendChild(renderStatus(running));
-					cpuNode.textContent = formatCpu(running, usage);
-					memoryNode.textContent = formatMemory(running, usage);
-					runtimeNode.textContent = formatRuntime(running, usage);
-					versionNode.textContent = formatVersion(usage);
-				});
-			}, 5);
+			function updateStatus(result) {
+				running = result[0];
+				usage = result[1];
+				while (statusNode.firstChild)
+					statusNode.removeChild(statusNode.firstChild);
+				statusNode.appendChild(renderStatus(running));
+				cpuNode.textContent = formatCpu(running, usage);
+				memoryNode.textContent = formatMemory(running, usage);
+				runtimeNode.textContent = formatRuntime(running, usage);
+				versionNode.textContent = formatVersion(usage);
+				startButton.disabled = running;
+				restartButton.disabled = !running;
+				stopButton.disabled = !running;
+			}
+
+			function refreshStatus() {
+				return Promise.all([ getServiceStatus(), getResourceUsage() ]).then(updateStatus);
+			}
+
+			function handleServiceAction(action) {
+				startButton.disabled = true;
+				restartButton.disabled = true;
+				stopButton.disabled = true;
+				return runInitCommand(action)
+					.then(refreshStatus)
+					.then(function () {
+						ui.addNotification(null, E('p', {}, actionMessages[action]), 'info');
+					})
+					.catch(function (e) {
+						ui.addNotification(null,
+							E('p', {}, _('Service action failed') + ': ' + e.message), 'error');
+						return refreshStatus();
+					});
+			}
+
+			startButton.addEventListener('click', function () { handleServiceAction('start'); });
+			restartButton.addEventListener('click', function () { handleServiceAction('restart'); });
+			stopButton.addEventListener('click', function () { handleServiceAction('stop'); });
+			updateStatus([ running, usage ]);
+			poll.add(refreshStatus, 5);
 
 			return E('div', { 'class': 'cbi-section' }, [
 				E('style', {}, statusCss),
 				E('h3', {}, _('Service Status')),
 				E('p', {}, [ _('Status'), ': ', statusNode ]),
+				E('div', { 'class': 'kixdns-service-actions' }, [ startButton, restartButton, stopButton ]),
 				E('div', { 'class': 'kixdns-status-grid' }, [
 					E('div', { 'class': 'kixdns-status-item' }, [
 						E('span', { 'class': 'kixdns-status-label' }, _('CPU Usage')),
@@ -154,7 +209,7 @@ return view.extend({
 		s = m.section(form.NamedSection, 'main', 'kixdns', _('General Settings'));
 
 		o = s.option(form.Flag, 'enabled', _('Enable'),
-			_('Enable and start the KixDNS service.'));
+			_('Start KixDNS automatically at system startup.'));
 		o.rmempty = false;
 
 		o = s.option(form.Flag, 'hijack', _('DNS Hijack'),

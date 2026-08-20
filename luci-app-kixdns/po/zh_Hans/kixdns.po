@@ -50,8 +50,29 @@ msgstr "基本设置"
 msgid "Enable"
 msgstr "启用"
 
-msgid "Enable and start the KixDNS service."
-msgstr "启用并启动 KixDNS 服务。"
+msgid "Start KixDNS automatically at system startup."
+msgstr "在系统启动时自动启动 KixDNS。"
+
+msgid "Start"
+msgstr "启动"
+
+msgid "Restart"
+msgstr "重启"
+
+msgid "Stop"
+msgstr "停止"
+
+msgid "KixDNS started."
+msgstr "KixDNS 已启动。"
+
+msgid "KixDNS restarted."
+msgstr "KixDNS 已重启。"
+
+msgid "KixDNS stopped."
+msgstr "KixDNS 已停止。"
+
+msgid "Service action failed"
+msgstr "服务操作失败"
 
 msgid "DNS Hijack"
 msgstr "DNS 劫持"

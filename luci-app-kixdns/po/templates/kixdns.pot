@@ -46,7 +46,28 @@ msgstr ""
 msgid "Enable"
 msgstr ""
 
-msgid "Enable and start the KixDNS service."
+msgid "Start KixDNS automatically at system startup."
+msgstr ""
+
+msgid "Start"
+msgstr ""
+
+msgid "Restart"
+msgstr ""
+
+msgid "Stop"
+msgstr ""
+
+msgid "KixDNS started."
+msgstr ""
+
+msgid "KixDNS restarted."
+msgstr ""
+
+msgid "KixDNS stopped."
+msgstr ""
+
+msgid "Service action failed"
 msgstr ""
 
 msgid "DNS Hijack"
