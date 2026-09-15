@@ -4,8 +4,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=kixdns
-PKG_VERSION:=0.1.1
-PKG_RELEASE:=7
+PKG_VERSION:=0.2.0
+PKG_RELEASE:=1
 
 # CI places a static musl binary here so the SDK only needs to package it.
 # Source builds remain the fallback for normal OpenWrt feed users.
@@ -15,9 +15,9 @@ KIXDNS_USE_PREBUILT:=$(if $(wildcard $(KIXDNS_PREBUILT)),1)
 ifeq ($(KIXDNS_USE_PREBUILT),)
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/olicesx/kixdns.git
-PKG_SOURCE_DATE:=2026-09-13
-PKG_SOURCE_VERSION:=352671624431f3b4e3c8b1163a3b789bbd552845
-PKG_MIRROR_HASH:=b7c509ad193b1ed8f2ed04a4b788e9ffdb2aa0cc222ee8ced7cd9e12d941d835
+PKG_SOURCE_DATE:=2026-09-15
+PKG_SOURCE_VERSION:=8ffb642a512515f3477d7e6b6e6dff14e0ec27c5
+PKG_MIRROR_HASH:=87007cc322d6658869cd776e6c4f69aebc9af3322f60f4feff52db659d8ec6e1
 
 PKG_BUILD_DEPENDS:=rust/host
 endif
