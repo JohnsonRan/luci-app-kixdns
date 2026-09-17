@@ -33,6 +33,11 @@ The installer interactively offers two release channels:
 1. **stable** (default) — packages from the latest published [release](https://github.com/JohnsonRan/luci-app-kixdns/releases/latest).
 2. **rolling** — packages built from the latest successfully built `main` branch.
 
+> **Recommended: rolling.** KixDNS core updates do not always come with a new stable
+> release, so choose rolling to receive ongoing core updates sooner. Rolling builds
+> pass CI but may contain changes not yet included in a stable release. The installer
+> still defaults to stable; select rolling explicitly or use the command below.
+
 For unattended installation, select the channel with `KIXDNS_RELEASE_TAG`:
 
 ```sh
