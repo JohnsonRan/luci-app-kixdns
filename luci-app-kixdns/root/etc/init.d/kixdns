@@ -230,7 +230,7 @@ start_service() {
 	config_get udp_workers main udp_workers ''
 	config_get geoip_download_url main geoip_download_url ''
 	config_get_bool debug main debug 0
-	config_get rust_log main rust_log 'error,kixdns::engine::matcher_adapter=info'
+	config_get rust_log main rust_log 'warn,kixdns::engine::matcher_adapter=info,kixdns::engine::phases=info'
 	log_file="$LOGFILE"
 	config_get log_size main log_size 1024
 

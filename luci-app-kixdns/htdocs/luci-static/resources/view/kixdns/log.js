@@ -7,21 +7,24 @@
 var css = '\
 .kixdns-log-wrap { background:#1e1e1e; color:#d4d4d4; border-radius:4px; padding:8px 10px; \
 	font-family:Consolas,Menlo,monospace; font-size:12px; line-height:1.55; \
-	overflow:auto; max-height:70vh; white-space:pre; } \
-.kixdns-log-line { display:block; } \
+	overflow:auto; max-height:70vh; white-space:pre-wrap; overflow-wrap:anywhere; } \
+.kixdns-log-line { display:block; padding:5px 0; border-bottom:1px solid #383838; } \
+.kx-field { display:inline-block; max-width:100%; margin-right:.5em; vertical-align:top; } \
 .kixdns-log-line.lvl-warn { background:rgba(210,153,34,.12); } \
 .kixdns-log-line.lvl-error { background:rgba(215,58,73,.18); } \
-.kx-syslog { color:#6a737d; } \
-.kx-ts { color:#569cd6; } \
+.kx-syslog { color:#9da5ae; } \
+.kx-ts { color:#569cd6; white-space:nowrap; } \
 .kx-event { color:#c586c0; } \
 .kx-rule { color:#dcdcaa; } \
 .kx-qname { color:#4ec9b0; font-weight:bold; } \
 .kx-ip { color:#9cdcfe; } \
-.kx-key { color:#808080; } \
-.kx-lvl-info { color:#2ea44f; font-weight:bold; } \
+.kx-key { color:#a0a0a0; } \
+.kx-number { color:#ce9178; } \
+.kx-bool { color:#c586c0; } \
+.kx-lvl-info { color:#73c991; font-weight:bold; } \
 .kx-lvl-warn { color:#d29922; font-weight:bold; } \
 .kx-lvl-error { color:#f85149; font-weight:bold; } \
-.kx-lvl-debug { color:#8b949e; }';
+.kx-lvl-debug, .kx-lvl-trace { color:#9da5ae; }';
 
 var LOGFILE = '/tmp/kixdns.log';
 
@@ -36,43 +39,62 @@ function escapeHTML(s) {
 	});
 }
 
-function getRule(line) {
-	var match = /(?:^|\s)rule=(?:"([^"]*)"|(\S+))/.exec(line);
-	return match ? (match[1] != null ? match[1] : match[2]) : null;
+function getFields(line) {
+	var re = /(^|\s)([A-Za-z_][\w.]*)=("(?:\\.|[^"\\])*"|\S+)/g;
+	var fields = [], match;
+	while ((match = re.exec(line)) !== null)
+		fields.push(match);
+	return fields;
 }
 
-/* Tokenize one log line into highlighted HTML */
-function highlightLine(line) {
-	line = line.replace(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})/, '$1 $2');
+function getRule(line) {
+	var fields = getFields(line);
+	for (var i = 0; i < fields.length; i++) {
+		if (fields[i][2] === 'rule')
+			return fields[i][3].replace(/^"|"$/g, '');
+	}
+	return null;
+}
 
-	var lvl = 'info';
-	var lm = /level="?(\w+)"?/.exec(line);
-	if (lm)
-		lvl = lm[1].toLowerCase();
-	else if (/\bERROR\b|\berror\b/.test(line))
-		lvl = 'error';
-	else if (/\bWARN(ING)?\b|\bwarn\b/.test(line))
-		lvl = 'warn';
-
-	var html = escapeHTML(line)
-		/* optional syslog prefix: "Mon Jul 20 01:15:22 2026 daemon.info kixdns[1615]:" */
+function highlightText(text) {
+	return escapeHTML(text)
 		.replace(/^(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4}\s+\S+\s+kixdns\[\d+\]:)/,
 			'<span class="kx-syslog">$1</span>')
-		/* timestamp */
-		.replace(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/,
-			'<span class="kx-ts">$1</span>')
-		/* key=value tokens */
-		.replace(/\bevent=(&quot;[^&]*&quot;|\S+)/,
-			'<span class="kx-key">event=</span><span class="kx-event">$1</span>')
-		.replace(/\brule=(\S+)/,
-			'<span class="kx-key">rule=</span><span class="kx-rule">$1</span>')
-		.replace(/\bqname=(\S+)/,
-			'<span class="kx-key">qname=</span><span class="kx-qname">$1</span>')
-		.replace(/\bclient_ip=(\S+)/,
-			'<span class="kx-key">client_ip=</span><span class="kx-ip">$1</span>')
-		.replace(/\blevel=(&quot;)?(\w+)(&quot;)?/,
-			'<span class="kx-key">level=</span>$1<span class="kx-lvl-' +
-				(/^(info|warn|error|debug|trace)$/.test(lvl) ? lvl : 'info') + '">$2</span>$3');
+		.replace(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)/g,
+			'<span class="kx-ts">$1</span>');
+}
+
+/* Parse raw tokens once; never run token regexes over generated HTML. */
+function highlightLine(line) {
+	var fields = getFields(line);
+	var header = line.slice(0, fields.length ? fields[0].index : line.length);
+	var lm = /(?:^|\s)(ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE)(?=\s|$)/.exec(header);
+	var lvl = lm ? lm[1].toLowerCase().replace('warning', 'warn') : 'info';
+	var classes = {
+		event: 'kx-event', rule: 'kx-rule', qname: 'kx-qname', client_ip: 'kx-ip',
+		upstream: 'kx-ip', pipeline: 'kx-rule', qtype: 'kx-event', transport: 'kx-event',
+		latency_ms: 'kx-number', cache: 'kx-bool', resp_match: 'kx-bool'
+	};
+	var html = '', offset = 0;
+
+	fields.forEach(function (field) {
+		var key = field[2], value = field[3];
+		var plain = value.replace(/^"|"$/g, '');
+		var cls = Object.prototype.hasOwnProperty.call(classes, key) ? classes[key] : 'kx-value';
+		if (key === 'level' && /^(info|warn|warning|error|debug|trace)$/i.test(plain)) {
+			lvl = plain.toLowerCase().replace('warning', 'warn');
+			cls = 'kx-lvl-' + lvl;
+		}
+		else if (key === 'rcode') {
+			cls = plain === 'NoError' ? 'kx-lvl-info' : 'kx-lvl-warn';
+		}
+
+		html += highlightText(line.slice(offset, field.index) + field[1]);
+		html += '<span class="kx-field"><span class="kx-key">' + escapeHTML(key) +
+			'=</span><span class="' + cls + '">' + escapeHTML(value) + '</span></span>';
+		offset = field.index + field[0].length;
+	});
+	html += highlightText(line.slice(offset));
 
 	return '<span class="kixdns-log-line lvl-' + lvl + '">' + html + '</span>';
 }

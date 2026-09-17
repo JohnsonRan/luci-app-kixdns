@@ -277,8 +277,9 @@ return view.extend({
 
 		o = s.option(form.Value, 'rust_log', _('Log filter'),
 			_('Tracing filter passed via the <code>RUST_LOG</code> environment variable.'));
-		o.default = 'error,kixdns::engine::matcher_adapter=info';
-		o.value('error,kixdns::engine::matcher_adapter=info', _('Errors + matcher logs (recommended)'));
+		o.default = 'warn,kixdns::engine::matcher_adapter=info,kixdns::engine::phases=info';
+		o.value(o.default, _('Query logs (recommended)'));
+		o.value('warn', _('Warnings and errors only'));
 		o.value('error', _('Errors only'));
 		o.value('info', _('Info'));
 		o.value('debug', _('Debug'));

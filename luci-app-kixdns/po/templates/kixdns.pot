@@ -152,7 +152,10 @@ msgstr ""
 msgid "Tracing filter passed via the <code>RUST_LOG</code> environment variable."
 msgstr ""
 
-msgid "Errors + matcher logs (recommended)"
+msgid "Query logs (recommended)"
+msgstr ""
+
+msgid "Warnings and errors only"
 msgstr ""
 
 msgid "Errors only"

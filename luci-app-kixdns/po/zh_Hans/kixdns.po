@@ -164,8 +164,11 @@ msgstr "日志过滤器"
 msgid "Tracing filter passed via the <code>RUST_LOG</code> environment variable."
 msgstr "通过 <code>RUST_LOG</code> 环境变量传递的 tracing 过滤器。"
 
-msgid "Errors + matcher logs (recommended)"
-msgstr "错误 + 匹配器日志（推荐）"
+msgid "Query logs (recommended)"
+msgstr "查询日志（推荐）"
+
+msgid "Warnings and errors only"
+msgstr "仅警告和错误"
 
 msgid "Errors only"
 msgstr "仅错误"
