@@ -7,9 +7,8 @@
 var css = '\
 .kixdns-log-wrap { background:#1e1e1e; color:#d4d4d4; border-radius:4px; padding:8px 10px; \
 	font-family:Consolas,Menlo,monospace; font-size:12px; line-height:1.55; \
-	overflow:auto; max-height:70vh; white-space:pre-wrap; overflow-wrap:anywhere; } \
-.kixdns-log-line { display:block; padding:5px 0; border-bottom:1px solid #383838; } \
-.kx-field { display:inline-block; max-width:100%; margin-right:.5em; vertical-align:top; } \
+	overflow:auto; max-height:70vh; white-space:pre; } \
+.kixdns-log-line { display:block; padding:2px 0; border-bottom:1px solid #383838; } \
 .kixdns-log-line.lvl-warn { background:rgba(210,153,34,.12); } \
 .kixdns-log-line.lvl-error { background:rgba(215,58,73,.18); } \
 .kx-syslog { color:#9da5ae; } \
@@ -60,8 +59,8 @@ function highlightText(text) {
 	return escapeHTML(text)
 		.replace(/^(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4}\s+\S+\s+kixdns\[\d+\]:)/,
 			'<span class="kx-syslog">$1</span>')
-		.replace(/(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)/g,
-			'<span class="kx-ts">$1</span>');
+		.replace(/(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?/g,
+			'<span class="kx-ts">$1 $2</span>');
 }
 
 /* Parse raw tokens once; never run token regexes over generated HTML. */

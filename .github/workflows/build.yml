@@ -9,6 +9,8 @@ on:
       - "kixdns/**"
       - "luci-app-kixdns/**"
       - "Justfile"
+      - "install.sh"
+      - "tests/**"
       - ".github/workflows/build.yml"
   release:
     types:
@@ -18,8 +20,18 @@ permissions:
   contents: read
 
 jobs:
+  checks:
+    name: Check logs, package archives, and installer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          node tests/log.test.cjs
+          node tests/packages.test.cjs
+
   build-core:
     name: Build core ${{ matrix.arch }}
+    needs: checks
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -113,6 +125,8 @@ jobs:
         env:
           ARCH: ${{ matrix.arch.name }}-${{ matrix.release.sdk }}
           FEEDNAME: kixdns
+          # SDK CONFIG_ALL selects translations built by the LuCI source target.
+          # package-output requires one translation package per source language.
           PACKAGES: kixdns luci-app-kixdns
           NO_REFRESH_CHECK: true
 

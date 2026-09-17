@@ -110,7 +110,7 @@ core-stage arch:
     mv "$source" "$target"; \
     chmod 0755 "$target"
 
-# Collect the core and LuCI packages into one release archive.
+# Collect the core, LuCI, and all application translations into one release archive.
 package-output arch release package_ext:
     @package_dir="bin/packages/{{arch}}/kixdns"; \
     output="kixdns_{{arch}}-openwrt-{{release}}.tar.gz"; \
@@ -123,12 +123,15 @@ package-output arch release package_ext:
     }; \
     core_package="$(find_package kixdns)"; \
     luci_package="$(find_package luci-app-kixdns)"; \
-    if [ -z "$core_package" ] || [ -z "$luci_package" ]; then \
-        echo "Expected kixdns and luci-app-kixdns .{{package_ext}} packages in $package_dir" >&2; \
+    shopt -s nullglob; \
+    i18n_packages=("$package_dir"/luci-i18n-kixdns-*.{{package_ext}}); \
+    expected_i18n="$(find luci-app-kixdns/po -mindepth 2 -maxdepth 2 -type f -name '*.po' ! -path '*/templates/*' -printf '%h\n' | sort -u | wc -l)"; \
+    if [ -z "$core_package" ] || [ -z "$luci_package" ] || [ "${#i18n_packages[@]}" -ne "$expected_i18n" ]; then \
+        echo "Expected kixdns, luci-app-kixdns, and $expected_i18n translation packages in $package_dir (found ${#i18n_packages[@]} translations)" >&2; \
         find "$package_dir" -maxdepth 1 -type f -print >&2 || true; \
         exit 1; \
     fi; \
-    cp "$core_package" "$luci_package" "$staging_dir/"; \
+    cp "$core_package" "$luci_package" "${i18n_packages[@]}" "$staging_dir/"; \
     tar -czf "$output" -C "$staging_dir" .; \
     echo "Created $output"
 

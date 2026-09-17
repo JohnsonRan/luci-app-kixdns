@@ -48,7 +48,7 @@ wget -O - https://raw.githubusercontent.com/JohnsonRan/luci-app-kixdns/main/inst
 wget -O - https://raw.githubusercontent.com/JohnsonRan/luci-app-kixdns/main/install.sh | KIXDNS_RELEASE_TAG=rolling sh
 ```
 
-The script detects the OpenWrt release and architecture, then installs the `.ipk` with `opkg` on OpenWrt 24.10 or the `.apk` with `apk` on OpenWrt 25.12. If no interactive terminal is available and `KIXDNS_RELEASE_TAG` is unset, it defaults to stable. For other releases or targets, build from source below.
+The script detects the OpenWrt release and architecture, then installs the core, LuCI application, and application translations matching the installed `luci-i18n-base-*` language packages (`.ipk` with `opkg` on OpenWrt 24.10 or `.apk` with `apk` on OpenWrt 25.12). Release archives include all available application translations; the installer selects only matching languages. If none match, including with older archives without translations, installation continues with a notice. If no interactive terminal is available and `KIXDNS_RELEASE_TAG` is unset, it defaults to stable. For other releases or targets, build from source below.
 
 ## Building
 

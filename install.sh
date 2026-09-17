@@ -134,10 +134,31 @@ if [ -z "$core_package" ] || [ -z "$luci_package" ]; then
 	exit 1
 fi
 
+case "$package_manager" in
+	opkg) installed_packages="$(opkg list-installed)" ;;
+	apk) installed_packages="$(apk info)" ;;
+esac
+languages="$(printf '%s\n' "$installed_packages" | awk '$1 ~ /^luci-i18n-base-/ { sub(/^luci-i18n-base-/, "", $1); print $1 }')"
+
+set -- "$core_package" "$luci_package"
+for language in $languages; do
+	# IPK uses name_version; APK uses name-version (versions start with a digit).
+	# Match the full locale, so e.g. pt does not select pt-br.
+	for package in "$tmpdir"/luci-i18n-kixdns-"$language"_*."$package_ext" \
+		"$tmpdir"/luci-i18n-kixdns-"$language"-[0-9]*."$package_ext"; do
+		[ -f "$package" ] || continue
+		set -- "$@" "$package"
+	done
+done
+if [ "$#" -eq 2 ]; then
+	# Also keep older archives without translations installable.
+	echo "notice: no application translations match installed luci-i18n-base-* packages; installing without translations" >&2
+fi
+
 echo "installing packages for OpenWrt $asset_release with $package_manager..."
 case "$package_manager" in
-	opkg) opkg install "$core_package" "$luci_package" ;;
-	apk) apk add --allow-untrusted "$core_package" "$luci_package" ;;
+	opkg) opkg install "$@" ;;
+	apk) apk add --allow-untrusted "$@" ;;
 esac
 
 echo "installed. Configure it under LuCI: Services > KixDNS"
