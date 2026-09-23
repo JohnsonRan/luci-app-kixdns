@@ -92,12 +92,6 @@ try {
 		success(run(`tar -czf fixture.tar.gz -C bin/packages/x86_64/kixdns ${names.concat(unrelated).join(' ')}`, cwd));
 		install(cwd, ext, 'rolling', names); // Ignore unrelated packages even if present in an archive.
 
-		// Older two-package releases remain installable, with an explicit translation warning.
-		const legacy = names.slice(0, 2).map(n => n.replace('1.6.0-r2', '1.5.5-r1'));
-		for (const name of legacy) fs.writeFileSync(path.join(packageDir, name), 'legacy fixture');
-		success(run(`tar -czf fixture.tar.gz -C bin/packages/x86_64/kixdns ${legacy.join(' ')}`, cwd));
-		install(cwd, ext, 'latest', legacy, true);
-		for (const name of legacy) fs.unlinkSync(path.join(packageDir, name));
 		for (const missing of names.slice(0, 3)) {
 			success(run(`tar -czf fixture.tar.gz -C bin/packages/x86_64/kixdns ${names.filter(n => n !== missing).join(' ')}`, cwd));
 			install(cwd, ext, 'rolling', null);
@@ -119,7 +113,7 @@ try {
 		for (const name of names.slice(3)) fs.unlinkSync(path.join(packageDir, name));
 		assert.notEqual(run(command, cwd).status, 0, 'Missing all translations must fail publication');
 		assert.ok(!fs.existsSync(path.join(cwd, archive)));
-		console.log(`PASS: ${ext} native stats dependency, translations, locale boundaries, prefix isolation, legacy fallback, missing packages`);
+		console.log(`PASS: ${ext} native stats dependency, translations, locale boundaries, prefix isolation, missing packages`);
 	}
 } finally {
 	fs.rmSync(temp, { recursive: true, force: true });

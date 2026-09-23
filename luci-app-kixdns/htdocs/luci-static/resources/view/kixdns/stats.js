@@ -206,14 +206,14 @@ return view.extend({
 				card(_('Queries'), String(stats.queries || 0)),
 				card(_('Cache hit rate'), pct(stats.cache_hits || 0, stats.queries || 0)),
 				card(_('Errors'), String(stats.errors || 0)),
-				card(_('Unique domains'), (stats.limited ? '≥ ' : '') + (stats.unique || 0))
+				card(_('Unique domains'), String(stats.unique || 0))
 			]));
 			if (stats.totals)
 				body.appendChild(E('p', { 'class': 'cbi-value-description kixdns-reference', 'title': _('Unaffected by filters') }, [ _('24h total: %s').format(Number(stats.totals.queries || 0).toLocaleString()) ]));
 			if (stats.partial) {
 				var gaps = (stats.coverage && stats.coverage.hours) || [];
 				var reasons = [];
-				if (gaps.some(function (h) { return h.legacy > 0; })) reasons.push(_('Historical associations unavailable.'));
+				if (gaps.some(function (h) { return h.legacy > 0; })) reasons.push(_('Some associations are unavailable.'));
 				if (gaps.some(function (h) { return h.capacity > 0; })) reasons.push(_('Oldest associations removed at the storage limit.'));
 				if (gaps.some(function (h) { return h.unsupported > 0; })) reasons.push(_('Some records could not be associated.'));
 				body.appendChild(E('details', { 'class': 'kixdns-coverage' }, [

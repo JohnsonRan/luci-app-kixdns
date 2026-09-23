@@ -73,37 +73,7 @@ func (s *boltStore) putClasses(entries map[string]cachedClass) error {
 	}
 	return nil
 }
-func (s *boltStore) importClasses(p paths) error {
-	data, err := importFile(p, "classify.tsv")
-	if err != nil {
-		return err
-	}
-	entries := make(map[string]cachedClass)
-	err = scan(bytes.NewReader(data), false, func(line string) error {
-		f := strings.Split(line, "\t")
-		if len(f) < 3 {
-			return nil
-		}
-		q := strings.ToLower(strings.TrimSuffix(f[0], "."))
-		confidence, e := strconv.ParseFloat(f[2], 64)
-		if e != nil {
-			return nil
-		}
-		c := cachedClass{Category: f[1], Confidence: confidence}
-		if len(f) > 3 {
-			c.Model = f[3]
-		}
-		if validDomain(q) && c.valid() {
-			entries[q] = c
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	return s.putClasses(entries)
-}
-func writeClassCache(p paths, hours []string, entries map[string]cachedClass) error {
+func writeClassCache(p paths, entries map[string]cachedClass) error {
 	lock, err := lockState(p)
 	if err != nil {
 		return err
@@ -119,7 +89,7 @@ func writeClassCache(p paths, hours []string, entries map[string]cachedClass) er
 		return err
 	}
 	defer tx.Rollback()
-	s, err := initializeStore(tx, p, hours)
+	s, err := initializeStore(tx)
 	if err != nil {
 		return err
 	}
@@ -363,7 +333,7 @@ func classify(p paths, hours []string, transport, domain string, probe bool) (ma
 		return classifyError("bad_response"), nil
 	}
 	if !probe {
-		if err = writeClassCache(p, hours, hits); err != nil {
+		if err = writeClassCache(p, hits); err != nil {
 			return nil, err
 		}
 	}

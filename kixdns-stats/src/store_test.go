@@ -107,7 +107,4 @@ func TestStateLifecycle(t *testing.T) {
 	}
 	p.persist = oldPersist
 	call("clear")
-	if _, err := os.Stat(filepath.Join(p.state, "stats.tsv")); !os.IsNotExist(err) {
-		t.Fatal("runtime TSV mirror must not exist", err)
-	}
 }

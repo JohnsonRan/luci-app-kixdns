@@ -131,22 +131,9 @@ for package in "$tmpdir"/*."$package_ext"; do
 	esac
 done
 
-if [ -z "$core_package" ] || [ -z "$luci_package" ]; then
-	echo "downloaded archive does not contain both kixdns and luci-app-kixdns .$package_ext packages" >&2
+if [ -z "$core_package" ] || [ -z "$stats_package" ] || [ -z "$luci_package" ]; then
+	echo "downloaded archive must contain kixdns, kixdns-stats and luci-app-kixdns .$package_ext packages" >&2
 	exit 1
-fi
-
-# Native stats is mandatory starting with LuCI 1.6; older releases remain usable.
-if [ -z "$stats_package" ]; then
-	version=${luci_package##*/}
-	version=${version#luci-app-kixdns?}
-	if ! printf '%s\n' "$version" | awk -F. '
-		$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && ($1 < 1 || ($1 == 1 && $2 < 6)) { legacy = 1 }
-		END { exit !legacy }
-	'; then
-		echo "downloaded archive is missing the required kixdns-stats package" >&2
-		exit 1
-	fi
 fi
 
 case "$package_manager" in
@@ -155,10 +142,7 @@ case "$package_manager" in
 esac
 languages="$(printf '%s\n' "$installed_packages" | awk '$1 ~ /^luci-i18n-base-/ { sub(/^luci-i18n-base-/, "", $1); print $1 }')"
 
-set -- "$core_package"
-# Older releases predate the native statistics package.
-[ -z "$stats_package" ] || set -- "$@" "$stats_package"
-set -- "$@" "$luci_package"
+set -- "$core_package" "$stats_package" "$luci_package"
 base_package_count=$#
 for language in $languages; do
 	# IPK uses name_version; APK uses name-version (versions start with a digit).
@@ -170,7 +154,6 @@ for language in $languages; do
 	done
 done
 if [ "$#" -eq "$base_package_count" ]; then
-	# Also keep older archives without translations installable.
 	echo "notice: no application translations match installed luci-i18n-base-* packages; installing without translations" >&2
 fi
 

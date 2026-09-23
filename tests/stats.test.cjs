@@ -86,7 +86,6 @@ try {
 	const portable = fixture();
 	portable.append(line('portable-a.example'));
 	assert.equal(portable.exec().queries, 1);
-	assert.ok(!fs.existsSync(path.join(portable.state, 'stats.tsv')), 'bbolt has no runtime TSV mirror');
 	const portableBin = path.join(portable.dir, 'bin');
 	fs.mkdirSync(portableBin);
 	for (const name of ['sh', 'awk', 'chmod', 'cmp', 'cp', 'flock', 'head', 'ls', 'md5sum', 'mkdir', 'mv', 'rm', 'sort', 'tail', 'tr', 'wc']) {
@@ -197,8 +196,6 @@ try {
 	idle.response({answers:{cat:{choice:'cdn',confidence:.9}}});
 	assert.equal(idle.exec('classify idle-a.example').did, 1);
 	assert.equal(idle.exec().top_qname[0][2], 'cdn', 'idle fast path sees database classification updates');
-	assert.ok(!fs.existsSync(path.join(idle.state, 'classify.tsv')), 'no runtime TSV cache');
-	assert.ok(!fs.existsSync(path.join(idle.dir, 'persist/classify.tsv')), 'no persistent TSV cache');
 	fs.writeFileSync(idle.log, line('idle-b.example', 'client_ip=192.0.2.1'));
 	assert.equal(idle.exec().queries, 2, 'same-size rewrite must not take the idle fast path');
 	assert.equal(idle.exec().queries, 2, 'updated database cursor must not replay');
@@ -278,11 +275,13 @@ try {
 	inheritance.env.KIXDNS_TYPESAFE_KEY = 'test';
 	inheritance.append(['cdn.example.com', 'img.cdn.example.com', 'a.img.cdn.example.com', 'other.example.com',
 		'www.example.com', 'example.com', 'printer.lan', 'nas.local', 'time.home.arpa', 'router'].map(q => line(q)).join(''));
-	fs.writeFileSync(path.join(inheritance.state, 'classify.tsv'), 'cdn.example.com\tcdn\t0.90\tjev-test\ncom\tmalware\t0.99\tjev-test\n');
+	inheritance.response({answers:{cat:{choice:'cdn',confidence:.9}}});
+	assert.equal(inheritance.exec('classify cdn.example.com').did, 1);
 	const before = inheritance.exec();
 	assert.equal(before.classify.pending, 3);
 	assert.equal(before.cats.cdn, 3);
 	assert.equal(before.cats.lan, 4);
+	inheritance.response({answers:{d0:{choice:'ok',confidence:.91}}});
 	assert.equal(inheritance.exec('classify').did, 1);
 	const after = inheritance.exec();
 	assert.equal(after.classify.pending, 0);

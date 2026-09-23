@@ -39,7 +39,6 @@ jobs:
           node tests/stats.test.cjs
           node tests/views.test.cjs
           node tests/packages.test.cjs
-          node tests/trial.test.cjs
 
   build-core:
     name: Build core ${{ matrix.arch }}

@@ -116,7 +116,7 @@ async function statsTests() {
 	const old = deferred();
 	const filtered = { ...stats, queries: 3, totals: { queries: 17 }, partial: true,
 		hours: [{ t: '2026-09-22T08', q: 0, partial: true }, { t: '2026-09-22T09', q: 3 }],
-		coverage: { hours: [{ legacy: 9, capacity: 5 }] }, classify: { enabled: false, pending: 0 } };
+		coverage: { hours: [{ legacy: 9, capacity: 5, unsupported: 1 }] }, classify: { enabled: false, pending: 0 } };
 	queue = [() => old.promise, result(filtered)];
 	const stale = callback();
 	client.value = 'laptop'; domain.value = 'ads'; category.value = 'ads';
@@ -130,8 +130,9 @@ async function statsTests() {
 	const coverage = nodes(page).find(n => n.tag === 'details');
 	assert.ok(coverage && !coverage.attrs.open, 'coverage explanations start collapsed');
 	assert.equal(coverage.children[0].innerHTML, 'Some hours are incomplete');
-	assert.ok(coverage.textContent.includes('Historical associations unavailable.'));
+	assert.ok(coverage.textContent.includes('Some associations are unavailable.'));
 	assert.ok(coverage.textContent.includes('Oldest associations removed'));
+	assert.ok(coverage.textContent.includes('Some records could not be associated.'));
 	const missing = nodes(page).find(n => (n.attrs.class || '').includes('kixdns-hour-missing'));
 	assert.ok(missing.attrs['aria-label'].includes('Incomplete associations'));
 	assert.ok(missing.textContent.includes('?'), 'missing zero hour is visibly unknown, not a confirmed zero');

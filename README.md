@@ -49,7 +49,7 @@ wget -O - https://raw.githubusercontent.com/JohnsonRan/luci-app-kixdns/main/inst
 wget -O - https://raw.githubusercontent.com/JohnsonRan/luci-app-kixdns/main/install.sh | KIXDNS_RELEASE_TAG=rolling sh
 ```
 
-The script detects the OpenWrt release and architecture, then installs the core, LuCI application, and application translations matching the installed `luci-i18n-base-*` language packages (`.ipk` with `opkg` on OpenWrt 24.10 or `.apk` with `apk` on OpenWrt 25.12). Release archives include all available application translations; the installer selects only matching languages. If none match, including with older archives without translations, installation continues with a notice. If no interactive terminal is available and `KIXDNS_RELEASE_TAG` is unset, it defaults to stable. For other releases or targets, build from source below.
+The script detects the OpenWrt release and architecture, then installs the core, LuCI application, and application translations matching the installed `luci-i18n-base-*` language packages (`.ipk` with `opkg` on OpenWrt 24.10 or `.apk` with `apk` on OpenWrt 25.12). Release archives include all available application translations; the installer selects only matching languages. If none match, installation continues with a notice. If no interactive terminal is available and `KIXDNS_RELEASE_TAG` is unset, it defaults to stable. For other releases or targets, build from source below.
 
 ## Building
 
@@ -115,14 +115,12 @@ The pure Go helper uses one bbolt `stats.db` (no CGO), preserving the public She
 interface. Statistics and classification cache share its transaction/checkpoint
 machinery. Go owns selection, validation and storage; Shell only handles HTTP.
 Client IP/hostname, domain keyword and category filters apply to every primary
-card, curve and ranking. The separate 24h total is unfiltered. Old TSV totals and
-cursor are imported once with an original-file backup; missing historical
-correlations are marked rather than invented. Existing `stats.bolt` data and
-classification TSV are adopted once; no ongoing TSV reads/writes or filename
-aliases are maintained.
+card, curve and ranking. The separate 24h total is unfiltered. The only
+statistics format is `stats.db`; missing associations are marked, not counted
+as confirmed zeroes.
 Idle polls skip database commits while refreshing hostnames/classifications.
 Log identity and boundary checks require neither external `stat` nor `cksum`.
-See [trial and rollback instructions](kixdns-stats/README.md).
+See [native core details](kixdns-stats/README.md).
 
 A soft 8 MiB live association budget discards oldest associated hours, not full
 query/cache/error totals. This is not a total RAM or file-size cap: bbolt's COW,
@@ -153,21 +151,15 @@ node tests/log.test.cjs
 node tests/stats.test.cjs
 node tests/views.test.cjs
 node tests/packages.test.cjs
-node tests/trial.test.cjs
 ```
 
-Log, view and archive tests also run under Windows/MSYS2. Native statistics and
-trial tests require Linux; Windows can cross-compile Go test binaries for WSL.
-
-The statistics suite mocks HTTP, but uses Go's production JSON validation.
-Trial tests mock the router's `jsonfilter`; the on-device self-test uses the real
-tool. `TEST_BASH` can select an alternative shell for the statistics suite.
-
-Use the [separate bbolt trial](kixdns-stats/README.md) for manual router acceptance.
-The retired Shell/TSV benchmark is not a test of this backend. Local tests and
-synthetic measurements do not establish target-device performance. RSS includes
-mmap pages and must not be added to tmpfs usage; logical writes are not physical
-flash wear. Real rpcd/jsonfilter, SDK and reboot acceptance remain separate checks.
+Log, view and archive tests also run under Windows/MSYS2. Native statistics
+tests require Linux; Windows can cross-compile Go test binaries for WSL.
+The statistics suite mocks HTTP but uses Go's production JSON validation.
+`TEST_BASH` can select an alternative shell for the statistics suite. Local
+tests do not establish router performance or power-cut safety. RSS includes
+mmap pages and must not be added to tmpfs usage; logical writes are not
+physical flash wear.
 
 ## Paths
 
@@ -176,4 +168,3 @@ flash wear. Real rpcd/jsonfilter, SDK and reboot acceptance remain separate chec
 - Service log: `/tmp/kixdns.log`
 - Runtime statistics and classification cache: `/tmp/kixdns-stats/stats.db`
 - Unified checkpoint: `/etc/kixdns/stats.db`
-- Original imports: `/etc/kixdns/stats-import.tsv`, `/etc/kixdns/classify-import.tsv`

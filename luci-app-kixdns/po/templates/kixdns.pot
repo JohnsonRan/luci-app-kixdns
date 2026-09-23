@@ -436,7 +436,7 @@ msgstr ""
 msgid "Some hours are incomplete"
 msgstr ""
 
-msgid "Historical associations unavailable."
+msgid "Some associations are unavailable."
 msgstr ""
 
 msgid "Oldest associations removed at the storage limit."

@@ -31,8 +31,7 @@ func jointFixture(t *testing.T) (paths, []string) {
 		t.Fatal(err)
 	}
 	for name, data := range map[string]string{
-		filepath.Join(p.state, "classify.tsv"): "ads.example\tads\t0.9\tmodel\nsafe.example\tok\t1\tmodel\nprinter.lan\tmalware\t1\tstale\n",
-		p.leases:                               "0 aa:bb:cc:dd:ee:ff 192.0.2.1 Laptop *\n0 aa:bb:cc:dd:ee:01 192.0.2.2 Phone *\n",
+		p.leases: "0 aa:bb:cc:dd:ee:ff 192.0.2.1 Laptop *\n0 aa:bb:cc:dd:ee:01 192.0.2.2 Phone *\n",
 		p.log: strings.Repeat(jointLine(hours[22], "ads.example", "192.0.2.1", "A", "NoError", true, "dnsA", "p1"), 2) +
 			jointLine(hours[23], "api.ads.example", "192.0.2.1", "AAAA", "ServFail", false, "dnsB", "p2") +
 			strings.Repeat(jointLine(hours[23], "safe.example", "192.0.2.2", "A", "NoError", true, "dnsA", "p1"), 3) +
@@ -41,6 +40,13 @@ func jointFixture(t *testing.T) (paths, []string) {
 		if err = os.WriteFile(name, []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := writeClassCache(p, map[string]cachedClass{
+		"ads.example":  {"ads", .9, "model"},
+		"safe.example": {"ok", 1, "model"},
+		"printer.lan":  {"malware", 1, "stale"},
+	}); err != nil {
+		t.Fatal(err)
 	}
 	return p, hours
 }
@@ -153,7 +159,7 @@ func TestLinkedStatistics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := writeClassCache(p, hours, map[string]cachedClass{"ads.example": {"cdn", 1, "new"}, "safe.example": {"ok", 1, "new"}}); err != nil {
+	if err := writeClassCache(p, map[string]cachedClass{"ads.example": {"cdn", 1, "new"}, "safe.example": {"ok", 1, "new"}}); err != nil {
 		t.Fatal(err)
 	}
 	for cat, want := range map[string]int64{"ads": 0, "cdn": 3, "lan": 1} {
@@ -168,20 +174,11 @@ func TestLinkedStatistics(t *testing.T) {
 		}
 	}
 }
-func TestMigrationAndRecovery(t *testing.T) {
+func TestCheckpointAndRecovery(t *testing.T) {
 	p, hours := jointFixture(t)
-	legacy := fmt.Sprintf("cursor\tnone\t0\tnone\nq\t%s\t-\t5\nqname\t%s\told.example\t5\n", hours[23], hours[23])
-	os.WriteFile(filepath.Join(p.state, "stats.tsv"), []byte(legacy), 0600)
-	s := jointCall(t, p, hours, "snapshot", queryFilter{})
-	if s.Queries != 7 || s.Totals.Queries != 12 || !s.Partial {
-		t.Fatal("legacy totals", s)
-	}
-	s = jointCall(t, p, hours, "snapshot", queryFilter{Domain: "example"})
-	if s.Queries != 6 || !s.Hours[23].Partial || s.Hours[22].Partial {
-		t.Fatal("fabricated legacy joints", s)
-	}
-	if h := s.Coverage.Hours[23]; h.Legacy != 5 || h.Capacity != 0 || h.Stored != 5 {
-		t.Fatal(h)
+	s := jointCall(t, p, hours, "snapshot", queryFilter{Domain: "example"})
+	if s.Queries != 6 || s.Totals.Queries != 7 || s.Partial {
+		t.Fatal("initial counters", s)
 	}
 	jointCall(t, p, hours, "fold", queryFilter{})
 	saved := filepath.Join(p.persist, databaseName)
@@ -194,7 +191,7 @@ func TestMigrationAndRecovery(t *testing.T) {
 		t.Fatal("idle checkpoint writes")
 	}
 	os.RemoveAll(p.state)
-	if s = jointCall(t, p, hours, "snapshot", queryFilter{Domain: "example"}); s.Queries != 6 || !s.Partial {
+	if s = jointCall(t, p, hours, "snapshot", queryFilter{Domain: "example"}); s.Queries != 6 || s.Partial {
 		t.Fatal("lost checkpoint", s)
 	}
 	jointCall(t, p, hours, "clear", queryFilter{})
@@ -204,21 +201,14 @@ func TestMigrationAndRecovery(t *testing.T) {
 	}
 	appendJoint(t, p, jointLine(hours[23], "new.example", "192.0.2.1", "A", "NoError", false, "dnsA", "p1"))
 	s = jointCall(t, p, hours, "snapshot", queryFilter{})
-	if s.Queries != 8 || s.Totals.Queries != 13 {
+	if s.Queries != 8 || s.Totals.Queries != 8 {
 		t.Fatal("clear lost totals", s)
 	}
 	os.RemoveAll(p.state)
 	for i := 0; i < 2; i++ {
-		if s = jointCall(t, p, hours, "snapshot", queryFilter{}); s.Queries != 8 || s.Totals.Queries != 13 {
+		if s = jointCall(t, p, hours, "snapshot", queryFilter{}); s.Queries != 8 || s.Totals.Queries != 8 {
 			t.Fatal("restart replay/loss", s)
 		}
-	}
-	backup, err := os.ReadFile(filepath.Join(p.persist, "stats-import.tsv"))
-	if err != nil || string(backup) != legacy {
-		t.Fatal("backup", err)
-	}
-	if _, err = os.Stat(filepath.Join(p.state, "stats.tsv")); !os.IsNotExist(err) {
-		t.Fatal("runtime TSV mirror", err)
 	}
 }
 func TestRollbackAndCapacity(t *testing.T) {
@@ -254,7 +244,7 @@ func TestRollbackAndCapacity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := initializeStore(tx, p, hours)
+	store, err := initializeStore(tx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +285,7 @@ func TestIncrementalCheckpoint(t *testing.T) {
 	info, _ := os.Stat(path)
 	appendJoint(t, p, jointLine(hours[23], "safe.example", "192.0.2.2", "A", "NoError", true, "dnsA", "p1"))
 	jointCall(t, p, hours, "snapshot", queryFilter{})
-	if err := writeClassCache(p, hours, map[string]cachedClass{"extra.example": {"cdn", 1, "test"}}); err != nil {
+	if err := writeClassCache(p, map[string]cachedClass{"extra.example": {"cdn", 1, "test"}}); err != nil {
 		t.Fatal(err)
 	}
 	live, err := connectBolt(filepath.Join(p.state, databaseName), false)
@@ -306,7 +296,7 @@ func TestIncrementalCheckpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := initializeStore(tx, p, hours)
+	store, err := initializeStore(tx)
 	if err != nil {
 		t.Fatal(err)
 	}

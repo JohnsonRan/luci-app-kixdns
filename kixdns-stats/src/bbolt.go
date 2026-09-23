@@ -79,7 +79,7 @@ type coverageInfo struct {
 	LimitBytes int64          `json:"limit_bytes"`
 }
 
-// Flat buckets only. Triples hold queries/hits/errors, or legacy/capacity/unsupported.
+// Flat buckets only. Triples hold queries/hits/errors, or unavailable/capacity/unsupported.
 type triple [3]int64
 
 func unpack(b []byte) (triple, error) {
@@ -181,25 +181,9 @@ func (s *boltStore) finish() error {
 	}
 	return s.tx.Commit()
 }
-func initializeStore(tx *bolt.Tx, p paths, hours []string) (*boltStore, error) {
+func initializeStore(tx *bolt.Tx) (*boltStore, error) {
 	s := &boltStore{tx: tx}
 	if tx.Bucket([]byte("meta")) != nil {
-		// One-time data upgrade, not a second runtime format.
-		if meta(tx, "version") == "1" {
-			if err := validateImportDB(tx); err != nil {
-				return nil, err
-			}
-			if _, err := tx.CreateBucket([]byte("classes")); err != nil {
-				return nil, err
-			}
-			s.dirty = true
-			if err := s.importClasses(p); err != nil {
-				return nil, err
-			}
-			if err := s.setMeta("version", "2"); err != nil {
-				return nil, err
-			}
-		}
 		if err := validateDB(tx); err != nil {
 			return nil, err
 		}
@@ -228,30 +212,7 @@ func initializeStore(tx *bolt.Tx, p paths, hours []string) (*boltStore, error) {
 			return nil, err
 		}
 	}
-	// One-time import only; all live reads/writes use database buckets.
-	if err := s.importClasses(p); err != nil {
-		return nil, err
-	}
-	data, err := importFile(p, "stats.tsv")
-	if err != nil {
-		return nil, err
-	}
-	c := newCounters(hours)
-	cur, err := c.load(bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	if err = s.saveMetrics(c); err != nil {
-		return nil, err
-	}
-	for k, n := range c.values {
-		if k.kind == "q" {
-			if err = s.gap(k.hour, 0, n); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if err = s.saveCursor(cur); err != nil {
+	if err := s.saveCursor(cursor{}); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -528,7 +489,7 @@ func connectBolt(name string, readonly bool) (*bolt.DB, error) {
 // Copy/compact only for initialization, restoration or significant free space.
 // Normal checkpoints diff keys in one transaction, not repeated full copies.
 func compactReplace(db *bolt.DB, target string) error {
-	f, err := os.CreateTemp(filepath.Dir(target), ".stats-bolt-")
+	f, err := os.CreateTemp(filepath.Dir(target), ".stats-db-")
 	if err != nil {
 		return err
 	}
@@ -587,9 +548,6 @@ func openManaged(name string) (*bolt.DB, error) {
 	return db, nil
 }
 func openDatabase(p paths) (*bolt.DB, error) {
-	if err := adoptDatabase(p); err != nil {
-		return nil, err
-	}
 	name := filepath.Join(p.state, databaseName)
 	if _, err := os.Stat(name); errors.Is(err, os.ErrNotExist) {
 		source := filepath.Join(p.persist, databaseName)
@@ -598,7 +556,7 @@ func openDatabase(p paths) (*bolt.DB, error) {
 			if e != nil {
 				return nil, e
 			}
-			e = saved.View(validateImportDB)
+			e = saved.View(validateDB)
 			if e == nil {
 				e = compactReplace(saved, name)
 			}
@@ -610,7 +568,7 @@ func openDatabase(p paths) (*bolt.DB, error) {
 			return nil, e
 		} else {
 			// Publish a fully initialized bbolt header, never a half-created live file.
-			tmp, e := os.CreateTemp(p.state, ".stats-bolt-init-")
+			tmp, e := os.CreateTemp(p.state, ".stats-db-init-")
 			if e != nil {
 				return nil, e
 			}
@@ -685,10 +643,10 @@ func checkpointDatabase(db *bolt.DB, p paths) error {
 	err = db.View(func(src *bolt.Tx) error {
 		equal := false
 		if e := saved.View(func(dst *bolt.Tx) error {
-			if e := validateImportDB(dst); e != nil {
+			if e := validateDB(dst); e != nil {
 				return e
 			}
-			replace = meta(src, "id") != meta(dst, "id") || meta(src, "version") != meta(dst, "version")
+			replace = meta(src, "id") != meta(dst, "id")
 			equal = !replace && meta(src, "revision") == meta(dst, "revision")
 			return nil
 		}); e != nil {
@@ -711,73 +669,6 @@ func checkpointDatabase(db *bolt.DB, p paths) error {
 	return nil
 }
 
-// Only the import boundary accepts the previous schema. Live operations require v2.
-func validateImportDB(tx *bolt.Tx) error {
-	if b := tx.Bucket([]byte("meta")); b != nil && string(b.Get([]byte("version"))) == "1" {
-		for _, name := range []string{"totals", "hourly", "gaps"} {
-			if tx.Bucket([]byte(name)) == nil {
-				return errors.New("unrecognized import database")
-			}
-		}
-		return nil
-	}
-	return validateDB(tx)
-}
-
-// Consume the old name by atomic rename; never maintain a filename alias or mirror.
-func adoptDatabase(p paths) error {
-	for _, dir := range []string{p.state, p.persist} {
-		target := filepath.Join(dir, databaseName)
-		if _, err := os.Lstat(target); err == nil {
-			continue
-		} else if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
-			return err
-		}
-		source := filepath.Join(dir, "stats.bolt")
-		if _, err := os.Lstat(source); errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
-			continue
-		} else if err != nil {
-			return err
-		}
-		db, err := connectBolt(source, true)
-		if err != nil {
-			return err
-		}
-		err = db.View(validateImportDB)
-		db.Close()
-		if err != nil {
-			return err
-		}
-		if err = os.Rename(source, target); err != nil {
-			return err
-		}
-		if err = syncPath(dir); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-func importFile(p paths, name string) ([]byte, error) {
-	data, err := os.ReadFile(filepath.Join(p.state, name))
-	if errors.Is(err, os.ErrNotExist) {
-		data, err = optionalFile(filepath.Join(p.persist, name))
-	}
-	if err != nil || len(data) == 0 {
-		return data, err
-	}
-	if err = privateDir(p.persist); err != nil {
-		return nil, err
-	}
-	backup := filepath.Join(p.persist, strings.TrimSuffix(name, ".tsv")+"-import.tsv")
-	if _, e := os.Stat(backup); errors.Is(e, os.ErrNotExist) {
-		if err = atomicFile(backup, data, true); err != nil {
-			return nil, err
-		}
-	} else if e != nil {
-		return nil, e
-	}
-	return data, nil
-}
 func validDomain(q string) bool {
 	if q == "" || len(q) > 253 {
 		return false

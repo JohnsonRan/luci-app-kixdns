@@ -10,12 +10,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash/crc32"
 	"io"
-	"math/bits"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -34,9 +31,8 @@ type cursor struct {
 	offset   int64
 }
 type counters struct {
-	values   map[metric]int64
-	keep     map[string]bool
-	distinct map[[2]string]int
+	values map[metric]int64
+	keep   map[string]bool
 }
 type classification struct {
 	category   string
@@ -63,7 +59,6 @@ type snapshot struct {
 	CacheHits   int64                `json:"cache_hits"`
 	Errors      int64                `json:"errors"`
 	Unique      int                  `json:"unique"`
-	Limited     bool                 `json:"limited"`
 	Hours       []hour               `json:"hours"`
 	TopQname    [][]any              `json:"top_qname"`
 	TopClient   [][]any              `json:"top_client"`
@@ -125,7 +120,7 @@ func hourKeys(now int64) ([]string, error) {
 }
 
 func newCounters(hours []string) *counters {
-	c := &counters{make(map[metric]int64), make(map[string]bool), make(map[[2]string]int)}
+	c := &counters{make(map[metric]int64), make(map[string]bool)}
 	for _, h := range hours {
 		c.keep[h] = true
 	}
@@ -136,20 +131,7 @@ func (c *counters) bump(kind, h, name string, n int64) {
 	if !c.keep[h] {
 		return
 	}
-	key := metric{kind, h, name}
-	switch kind {
-	case "qname", "client", "upstream", "pipeline", "qtype", "rcode":
-		if _, exists := c.values[key]; !exists {
-			bucket := [2]string{kind, h}
-			// Match the existing 100-key/hour ceiling; totals remain unbounded.
-			if c.distinct[bucket] >= 100 {
-				c.bump("limit", h, "-", n)
-				return
-			}
-			c.distinct[bucket]++
-		}
-	}
-	c.values[key] += n
+	c.values[metric{kind, h, name}] += n
 }
 
 func scan(r io.Reader, completeOnly bool, visit func(string) error) error {
@@ -177,28 +159,6 @@ func scan(r io.Reader, completeOnly bool, visit func(string) error) error {
 	return s.Err()
 }
 
-func (c *counters) load(r io.Reader) (cursor, error) {
-	var cur cursor
-	err := scan(r, false, func(line string) error {
-		f := strings.Split(line, "\t")
-		if len(f) >= 4 && f[0] == "cursor" {
-			n, err := strconv.ParseInt(f[2], 10, 64)
-			if err != nil || n < 0 || len(f[2]) > 11 {
-				return errors.New("invalid cursor offset")
-			}
-			id := f[1][strings.LastIndex(f[1], ":")+1:]
-			cur = cursor{id, f[3], n}
-		} else if len(f) == 4 && c.keep[f[1]] {
-			n, err := strconv.ParseUint(f[3], 10, 63)
-			if err == nil {
-				c.bump(f[0], f[1], f[2], int64(n))
-			}
-		}
-		return nil
-	})
-	return cur, err
-}
-
 func fields(line string) map[string]string {
 	out := make(map[string]string)
 	for {
@@ -217,12 +177,7 @@ func fields(line string) map[string]string {
 	}
 }
 
-func (c *counters) ingest(log *os.File, cur cursor) error {
-	_, err := c.advance(log, cur, nil)
-	return err
-}
-
-func fingerprint(log *os.File, offset int64, legacy bool) (string, error) {
+func fingerprint(log *os.File, offset int64) (string, error) {
 	if offset == 0 {
 		return "none", nil
 	}
@@ -231,20 +186,7 @@ func fingerprint(log *os.File, offset int64, legacy bool) (string, error) {
 	if _, err := log.ReadAt(boundary, start); err != nil {
 		return "", err
 	}
-	if !legacy {
-		return fmt.Sprintf("%x:-", md5.Sum(boundary)), nil
-	}
-	// POSIX cksum: non-reflected IEEE CRC, zero initial register, appended length.
-	// Reverse the input/output bits to reuse the standard library's reflected CRC.
-	n := len(boundary)
-	for length := n; length != 0; length >>= 8 {
-		boundary = append(boundary, byte(length))
-	}
-	for i := range boundary {
-		boundary[i] = bits.Reverse8(boundary[i])
-	}
-	crc := bits.Reverse32(crc32.Update(^uint32(0), crc32.IEEETable, boundary))
-	return fmt.Sprintf("%d:%d", crc, n), nil
+	return fmt.Sprintf("%x:-", md5.Sum(boundary)), nil
 }
 
 func (c *counters) advance(log *os.File, cur cursor, visit func(string, string, map[string]string) error) (cursor, error) {
@@ -260,7 +202,7 @@ func (c *counters) advance(log *os.File, cur cursor, visit func(string, string, 
 	if id != cur.id || info.Size() < offset {
 		offset = 0
 	} else if offset > 0 {
-		mark, err := fingerprint(log, offset, !strings.HasSuffix(cur.mark, ":-"))
+		mark, err := fingerprint(log, offset)
 		if err != nil {
 			return cur, err
 		}
@@ -290,48 +232,13 @@ func (c *counters) advance(log *os.File, cur cursor, visit func(string, string, 
 		if rc := f["rcode"]; rc != "" && rc != "NoError" {
 			c.bump("err", h, "-", 1)
 		}
-		if visit != nil {
-			return visit(h, name, f)
-		}
-		c.bump("qname", h, name, 1)
-		for _, pair := range [][2]string{{"client", "client_ip"}, {"upstream", "upstream"}, {"pipeline", "pipeline"}, {"qtype", "qtype"}, {"rcode", "rcode"}} {
-			if value := f[pair[1]]; value != "" {
-				c.bump(pair[0], h, value, 1)
-			}
-		}
-		return nil
+		return visit(h, name, f)
 	})
 	if err != nil {
 		return cur, err
 	}
-	next.mark, err = fingerprint(log, next.offset, false)
+	next.mark, err = fingerprint(log, next.offset)
 	return next, err
-}
-
-func openState(p paths, name string) (*os.File, error) {
-	f, err := os.Open(filepath.Join(p.state, name))
-	if errors.Is(err, os.ErrNotExist) {
-		return os.Open(filepath.Join(p.persist, name))
-	}
-	return f, err
-}
-
-func readClasses(r io.Reader) (map[string]classification, int, error) {
-	classes := make(map[string]classification)
-	cached := 0
-	err := scan(r, false, func(line string) error {
-		f := strings.Split(line, "\t")
-		if len(f) >= 2 && f[0] != "" {
-			var confidence float64
-			if len(f) >= 3 {
-				confidence, _ = strconv.ParseFloat(f[2], 64)
-			}
-			classes[f[0]] = classification{f[1], confidence}
-			cached++
-		}
-		return nil
-	})
-	return classes, cached, err
 }
 
 func resolve(q string, classes map[string]classification) (classification, bool) {
@@ -416,8 +323,6 @@ func (c *counters) render(hours []string, classes map[string]classification, cac
 			s.CacheHits += n
 		case "err":
 			s.Errors += n
-		case "limit":
-			s.Limited = true
 		default:
 			if totals[k.kind] == nil {
 				totals[k.kind] = make(map[string]int64)
@@ -458,57 +363,6 @@ func (c *counters) render(hours []string, classes map[string]classification, cac
 	s.TopUpstream, s.TopPipeline = ranked(totals["upstream"]), ranked(totals["pipeline"])
 	s.Qtype, s.Rcode = totals["qtype"], totals["rcode"]
 	return s
-}
-
-func collect(p paths, hours []string, enabled bool) (snapshot, error) {
-	var empty snapshot
-	if len(hours) != 24 {
-		return empty, errors.New("expected 24 hour keys")
-	}
-	// Open the existing lock read-only. Do not bootstrap or mutate production state.
-	lock, err := os.Open(filepath.Join(p.state, "state.lock"))
-	if err != nil {
-		return empty, fmt.Errorf("open existing state lock (run installed snapshot first): %w", err)
-	}
-	defer lock.Close()
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_SH); err != nil {
-		return empty, err
-	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
-
-	c := newCounters(hours)
-	var cur cursor
-	f, err := openState(p, "stats.tsv")
-	if err == nil {
-		cur, err = c.load(f)
-		f.Close()
-	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return empty, err
-	}
-	log, err := os.Open(p.log)
-	if err == nil {
-		err = c.ingest(log, cur)
-		log.Close()
-	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return empty, err
-	}
-	var classes map[string]classification
-	cached := 0
-	f, err = openState(p, "classify.tsv")
-	if err == nil {
-		classes, cached, err = readClasses(f)
-		f.Close()
-	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return empty, err
-	}
-	hosts, err := readHosts(p)
-	if err != nil {
-		return empty, err
-	}
-	return c.render(hours, classes, cached, hosts, enabled), nil
 }
 
 func run() error {

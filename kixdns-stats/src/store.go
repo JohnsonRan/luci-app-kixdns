@@ -124,7 +124,7 @@ func updateFiltered(p paths, hours []string, enabled bool, command string, q que
 		return empty, err
 	}
 	defer tx.Rollback()
-	store, err := initializeStore(tx, p, hours)
+	store, err := initializeStore(tx)
 	if err != nil {
 		return empty, err
 	}
@@ -212,7 +212,7 @@ func updateFiltered(p paths, hours []string, enabled bool, command string, q que
 		return empty, err
 	}
 	defer tx.Rollback()
-	store, err = initializeStore(tx, p, hours)
+	store, err = initializeStore(tx)
 	if err != nil {
 		return empty, err
 	}

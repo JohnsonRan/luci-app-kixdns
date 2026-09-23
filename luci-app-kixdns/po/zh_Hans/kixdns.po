@@ -450,8 +450,8 @@ msgstr "不受筛选影响"
 msgid "Some hours are incomplete"
 msgstr "部分时段数据不完整"
 
-msgid "Historical associations unavailable."
-msgstr "旧统计没有关联信息。"
+msgid "Some associations are unavailable."
+msgstr "部分关联信息不可用。"
 
 msgid "Oldest associations removed at the storage limit."
 msgstr "存储已达上限，最旧的关联时段已移除。"
