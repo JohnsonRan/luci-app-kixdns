@@ -294,6 +294,11 @@ return view.extend({
 		o.default = '1024';
 		o.placeholder = '1024';
 
+		o = s.option(form.Value, 'typesafe_api_key', _('TypeSafe API key'),
+			_('Optional. Enables automatic TypeSafe Jev classification. Eligible domain names are sent to TypeSafe; leave empty to disable.'));
+		o.password = true;
+		o.rmempty = true;
+
 		return m.render();
 	}
 });

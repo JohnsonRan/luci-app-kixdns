@@ -209,9 +209,13 @@ return view.extend({
 		}
 
 		function clearLog() {
-			return fs.write(LOGFILE, '')
-				.then(refresh)
-				.catch(function (e) { ui.addNotification(null, E('p', e.message), 'error'); });
+			return fs.exec('/usr/libexec/kixdns-stats', [ 'clear' ])
+				.then(function (res) {
+					if (!res || res.code !== 0)
+						throw new Error((res && res.stderr) || _('Failed to save statistics; log was not cleared.'));
+					return refresh();
+				})
+				.catch(function (e) { ui.addNotification(null, E('p', {}, [ e.message ]), 'error'); });
 		}
 
 		poll.add(function () {
@@ -246,6 +250,7 @@ return view.extend({
 					}, _('Refresh')),
 					E('button', {
 						'class': 'btn cbi-button cbi-button-remove',
+						'disabled': !L.hasViewPermission(),
 						'click': ui.createHandlerFn(this, clearLog)
 					}, _('Clear log')),
 					lineCount

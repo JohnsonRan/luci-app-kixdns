@@ -11,7 +11,9 @@
 				"/etc/kixdns/*": [ "read" ],
 				"/tmp/kixdns.log": [ "read" ],
 				"/usr/libexec/kixdns-tail-log": [ "exec" ],
-				"/usr/libexec/kixdns-status": [ "exec" ]
+				"/usr/libexec/kixdns-status": [ "exec" ],
+				"/usr/libexec/kixdns-stats snapshot": [ "exec" ],
+				"/usr/libexec/kixdns-stats snapshot *": [ "exec" ]
 			},
 			"uci": [ "kixdns" ]
 		},
@@ -19,6 +21,8 @@
 			"file": {
 				"/etc/kixdns/*": [ "write" ],
 				"/tmp/kixdns.log": [ "write" ],
+				"/usr/libexec/kixdns-stats classify": [ "exec" ],
+				"/usr/libexec/kixdns-stats clear": [ "exec" ],
 				"/etc/init.d/kixdns": [ "exec" ]
 			},
 			"uci": [ "kixdns" ]

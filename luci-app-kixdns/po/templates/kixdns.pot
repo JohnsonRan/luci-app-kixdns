@@ -270,3 +270,177 @@ msgstr ""
 
 msgid "Log file: %s"
 msgstr ""
+
+msgid "Stats"
+msgstr ""
+
+msgid "KixDNS - Stats"
+msgstr ""
+
+msgid "Query totals from dns_response logs for the current and previous 23 hours. Checkpointed every five minutes and on service stop. With a TypeSafe API key, eligible domain names are sent to TypeSafe for classification."
+msgstr ""
+
+msgid "Queries"
+msgstr ""
+
+msgid "Cache hit rate"
+msgstr ""
+
+msgid "Errors"
+msgstr ""
+
+msgid "Unique domains"
+msgstr ""
+
+msgid "Queries (24h)"
+msgstr ""
+
+msgid "Categories"
+msgstr ""
+
+msgid "Top domains"
+msgstr ""
+
+msgid "Top clients"
+msgstr ""
+
+msgid "Top upstreams"
+msgstr ""
+
+msgid "Pipelines"
+msgstr ""
+
+msgid "Query types"
+msgstr ""
+
+msgid "Response codes"
+msgstr ""
+
+msgid "None"
+msgstr ""
+
+msgid "Classifying..."
+msgstr ""
+
+msgid "Statistics request failed"
+msgstr ""
+
+msgid "Failed to save statistics; log was not cleared."
+msgstr ""
+
+msgid "Breakdowns are limited to 100 unique values per hour; totals remain complete."
+msgstr ""
+
+msgid "Classify pending (%d)"
+msgstr ""
+
+msgid "Unclassified"
+msgstr ""
+
+msgid "Ads"
+msgstr ""
+
+msgid "Trackers"
+msgstr ""
+
+msgid "Malware"
+msgstr ""
+
+msgid "Phishing"
+msgstr ""
+
+msgid "Adult"
+msgstr ""
+
+msgid "Social"
+msgstr ""
+
+msgid "CDN"
+msgstr ""
+
+msgid "PCDN"
+msgstr ""
+
+msgid "P2P"
+msgstr ""
+
+msgid "Gaming"
+msgstr ""
+
+msgid "Cloud"
+msgstr ""
+
+msgid "Captive"
+msgstr ""
+
+msgid "AI"
+msgstr ""
+
+msgid "Updates"
+msgstr ""
+
+msgid "Streaming"
+msgstr ""
+
+msgid "Ordinary"
+msgstr ""
+
+msgid "Intranet"
+msgstr ""
+
+msgid "TypeSafe API key"
+msgstr ""
+
+msgid "Optional. Enables automatic TypeSafe Jev classification. Eligible domain names are sent to TypeSafe; leave empty to disable."
+msgstr ""
+
+msgid "Client"
+msgstr ""
+
+msgid "Domain"
+msgstr ""
+
+msgid "Category"
+msgstr ""
+
+msgid "Client IP or hostname"
+msgstr ""
+
+msgid "Domain keyword"
+msgstr ""
+
+msgid "All categories"
+msgstr ""
+
+msgid "Apply filters"
+msgstr ""
+
+msgid "Clear filters"
+msgstr ""
+
+msgid "Retained queries"
+msgstr ""
+
+msgid "Incomplete associations; this is not a complete hourly count."
+msgstr ""
+
+msgid "Filter results"
+msgstr ""
+
+msgid "24h total: %s"
+msgstr ""
+
+msgid "Unaffected by filters"
+msgstr ""
+
+msgid "Some hours are incomplete"
+msgstr ""
+
+msgid "Historical associations unavailable."
+msgstr ""
+
+msgid "Oldest associations removed at the storage limit."
+msgstr ""
+
+msgid "Some records could not be associated."
+msgstr ""

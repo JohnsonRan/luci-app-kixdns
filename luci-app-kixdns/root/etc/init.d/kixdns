@@ -71,8 +71,11 @@ clear_oversized_log() {
 	[ "${#log_size}" -le 7 ] && [ "$log_size" -ge 1 ] && [ "$log_size" -le 1048576 ] 2>/dev/null || \
 		log_size=1024
 	sz="$(wc -c < "$log_file" 2>/dev/null)"
-	[ "${sz:-0}" -gt "$((log_size * 1024))" ] && : > "$log_file"
-	return 0
+	if [ "${sz:-0}" -gt "$((log_size * 1024))" ]; then
+		KIXDNS_LOG="$log_file" /usr/libexec/kixdns-stats clear
+	else
+		KIXDNS_LOG="$log_file" /usr/libexec/kixdns-stats fold
+	fi
 }
 
 download_file() {
@@ -157,7 +160,9 @@ clear_log() {
 
 	config_load kixdns
 	config_get log_size main log_size 1024
-	clear_oversized_log "$LOGFILE" "$log_size"
+	clear_oversized_log "$LOGFILE" "$log_size" || return 1
+	# Network classification runs from cron, never on service start/stop or log clear.
+	/usr/libexec/kixdns-stats classify >/dev/null
 }
 
 schedule_log_clear() {
@@ -240,7 +245,8 @@ start_service() {
 	}
 
 	mkdir -p "${log_file%/*}"
-	clear_oversized_log "$log_file" "$log_size"
+	clear_oversized_log "$log_file" "$log_size" || \
+		logger -t kixdns "failed to checkpoint statistics; keeping the log"
 	schedule_log_clear
 	download_geoip "$geoip_download_url" || true
 
@@ -260,6 +266,7 @@ start_service() {
 }
 
 stop_service() {
+	/usr/libexec/kixdns-stats fold || logger -t kixdns "failed to checkpoint statistics"
 	flush_hijack
 	unschedule_log_clear
 }

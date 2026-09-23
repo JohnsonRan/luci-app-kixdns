@@ -64,8 +64,8 @@ try {
 		const packageDir = path.join(cwd, 'bin/packages/x86_64/kixdns');
 		fs.mkdirSync(packageDir, { recursive: true });
 		fs.writeFileSync(path.join(cwd, 'openwrt_release'), `DISTRIB_RELEASE='${release}.1'\nDISTRIB_ARCH='x86_64'\n`);
-		const names = ['kixdns', 'luci-app-kixdns', 'luci-i18n-kixdns-zh-cn', 'luci-i18n-kixdns-fr', 'luci-i18n-kixdns-pt-br']
-			.map(name => `${name}${separator}1.5.5-r1${separator}all.${ext}`);
+		const names = ['kixdns', 'luci-app-kixdns', 'kixdns-stats', 'luci-i18n-kixdns-zh-cn', 'luci-i18n-kixdns-fr', 'luci-i18n-kixdns-pt-br']
+			.map(name => `${name}${separator}1.6.0-r2${separator}all.${ext}`);
 		for (const language of ['zh_Hans', 'fr', 'pt_BR', 'templates']) {
 			const dir = path.join(cwd, 'luci-app-kixdns/po', language);
 			fs.mkdirSync(dir, { recursive: true });
@@ -73,7 +73,7 @@ try {
 			for (const file of ['kixdns.po', 'extra.po']) fs.writeFileSync(path.join(dir, file), 'fixture');
 		}
 		for (const name of names) fs.writeFileSync(path.join(packageDir, name), 'fixture');
-		const unrelated = [`unrelated${separator}1.0.${ext}`, `luci-i18n-other-zh-cn${separator}1.0.${ext}`];
+		const unrelated = [`unrelated${separator}1.0.${ext}`, `kixdns-unrelated${separator}1.0.${ext}`, `luci-i18n-other-zh-cn${separator}1.0.${ext}`];
 		for (const name of unrelated) fs.writeFileSync(path.join(packageDir, name), 'ignore');
 		const values = { arch: 'x86_64', release, package_ext: ext };
 		const command = recipe[1].replace(/^    @?/gm, '').replace(/{{(\w+)}}/g, (_, key) => values[key]);
@@ -81,27 +81,30 @@ try {
 		const archive = `kixdns_x86_64-openwrt-${release}.tar.gz`;
 		const entries = success(run(`tar -tzf ${archive}`, cwd)).trim().split('\n')
 			.filter(name => name !== './').map(name => name.replace(/^\.\//, '')).sort();
-		assert.deepEqual(entries, names.slice().sort(), 'Publish the core, LuCI, and all application translations');
+		assert.deepEqual(entries, names.slice().sort(), 'Publish both native packages, LuCI, and all application translations');
 		fs.copyFileSync(path.join(cwd, archive), path.join(cwd, 'fixture.tar.gz'));
 		for (const channel of ['latest', 'rolling']) install(cwd, ext, channel, names);
-		for (const [language, index] of [['zh-cn', 2], ['fr', 3], ['pt-br', 4]])
-			install(cwd, ext, 'latest', names.slice(0, 2).concat(names[index]), false, [language]);
-		install(cwd, ext, 'latest', names.slice(0, 2), true, []);
-		install(cwd, ext, 'latest', names.slice(0, 2), true, ['de']);
-		install(cwd, ext, 'latest', names.slice(0, 2), true, ['pt']); // Must not match pt-br.
+		for (const [language, index] of [['zh-cn', 3], ['fr', 4], ['pt-br', 5]])
+			install(cwd, ext, 'latest', names.slice(0, 3).concat(names[index]), false, [language]);
+		install(cwd, ext, 'latest', names.slice(0, 3), true, []);
+		install(cwd, ext, 'latest', names.slice(0, 3), true, ['de']);
+		install(cwd, ext, 'latest', names.slice(0, 3), true, ['pt']); // Must not match pt-br.
 		success(run(`tar -czf fixture.tar.gz -C bin/packages/x86_64/kixdns ${names.concat(unrelated).join(' ')}`, cwd));
 		install(cwd, ext, 'rolling', names); // Ignore unrelated packages even if present in an archive.
 
 		// Older two-package releases remain installable, with an explicit translation warning.
-		success(run(`tar -czf fixture.tar.gz -C bin/packages/x86_64/kixdns ${names.slice(0, 2).join(' ')}`, cwd));
-		install(cwd, ext, 'latest', names.slice(0, 2), true);
-		for (const missing of names.slice(0, 2)) {
+		const legacy = names.slice(0, 2).map(n => n.replace('1.6.0-r2', '1.5.5-r1'));
+		for (const name of legacy) fs.writeFileSync(path.join(packageDir, name), 'legacy fixture');
+		success(run(`tar -czf fixture.tar.gz -C bin/packages/x86_64/kixdns ${legacy.join(' ')}`, cwd));
+		install(cwd, ext, 'latest', legacy, true);
+		for (const name of legacy) fs.unlinkSync(path.join(packageDir, name));
+		for (const missing of names.slice(0, 3)) {
 			success(run(`tar -czf fixture.tar.gz -C bin/packages/x86_64/kixdns ${names.filter(n => n !== missing).join(' ')}`, cwd));
 			install(cwd, ext, 'rolling', null);
 		}
 
 		fs.unlinkSync(path.join(cwd, archive));
-		for (const missing of names.slice(2)) {
+		for (const missing of names.slice(3)) {
 			fs.unlinkSync(path.join(packageDir, missing));
 			const result = run(command, cwd);
 			assert.notEqual(result.status, 0, 'A partial set of translations must fail publication');
@@ -109,10 +112,14 @@ try {
 			assert.ok(!fs.existsSync(path.join(cwd, archive)));
 			fs.writeFileSync(path.join(packageDir, missing), 'fixture');
 		}
-		for (const name of names.slice(2)) fs.unlinkSync(path.join(packageDir, name));
+		fs.unlinkSync(path.join(packageDir, names[2]));
+		assert.notEqual(run(command, cwd).status, 0, 'Missing native stats must fail publication');
+		assert.ok(!fs.existsSync(path.join(cwd, archive)));
+		fs.writeFileSync(path.join(packageDir, names[2]), 'fixture');
+		for (const name of names.slice(3)) fs.unlinkSync(path.join(packageDir, name));
 		assert.notEqual(run(command, cwd).status, 0, 'Missing all translations must fail publication');
 		assert.ok(!fs.existsSync(path.join(cwd, archive)));
-		console.log(`PASS: ${ext} all translations archived, base-language selection, locale boundaries, unrelated packages excluded, legacy fallback, missing packages`);
+		console.log(`PASS: ${ext} native stats dependency, translations, locale boundaries, prefix isolation, legacy fallback, missing packages`);
 	}
 } finally {
 	fs.rmSync(temp, { recursive: true, force: true });

@@ -29,6 +29,15 @@
 		}
 	},
 
+	"admin/services/kixdns/stats": {
+		"title": "Stats",
+		"order": 25,
+		"action": {
+			"type": "view",
+			"path": "kixdns/stats"
+		}
+	},
+
 	"admin/services/kixdns/log": {
 		"title": "Log",
 		"order": 30,

@@ -284,3 +284,177 @@ msgstr "清空日志"
 
 msgid "Log file: %s"
 msgstr "日志文件：%s"
+
+msgid "Stats"
+msgstr "统计"
+
+msgid "KixDNS - Stats"
+msgstr "KixDNS - 统计"
+
+msgid "Query totals from dns_response logs for the current and previous 23 hours. Checkpointed every five minutes and on service stop. With a TypeSafe API key, eligible domain names are sent to TypeSafe for classification."
+msgstr "统计当前及此前 23 个小时的 dns_response 日志，每五分钟及服务停止时保存。配置 TypeSafe API 密钥后，符合条件的域名会发送至 TypeSafe 进行分类。"
+
+msgid "Queries"
+msgstr "查询"
+
+msgid "Cache hit rate"
+msgstr "缓存命中率"
+
+msgid "Errors"
+msgstr "错误"
+
+msgid "Unique domains"
+msgstr "唯一域名"
+
+msgid "Queries (24h)"
+msgstr "查询（24 小时）"
+
+msgid "Categories"
+msgstr "分类"
+
+msgid "Top domains"
+msgstr "热门域名"
+
+msgid "Top clients"
+msgstr "热门客户端"
+
+msgid "Top upstreams"
+msgstr "热门上游"
+
+msgid "Pipelines"
+msgstr "流水线"
+
+msgid "Query types"
+msgstr "查询类型"
+
+msgid "Response codes"
+msgstr "响应码"
+
+msgid "None"
+msgstr "无"
+
+msgid "Classifying..."
+msgstr "正在分类…"
+
+msgid "Statistics request failed"
+msgstr "统计请求失败"
+
+msgid "Failed to save statistics; log was not cleared."
+msgstr "统计保存失败，日志未清除。"
+
+msgid "Breakdowns are limited to 100 unique values per hour; totals remain complete."
+msgstr "各明细每小时最多记录 100 个不同值；查询总数仍完整保留。"
+
+msgid "Classify pending (%d)"
+msgstr "分类未处理（%d）"
+
+msgid "Unclassified"
+msgstr "未分类"
+
+msgid "Ads"
+msgstr "广告"
+
+msgid "Trackers"
+msgstr "跟踪器"
+
+msgid "Malware"
+msgstr "恶意软件"
+
+msgid "Phishing"
+msgstr "钓鱼"
+
+msgid "Adult"
+msgstr "成人内容"
+
+msgid "Social"
+msgstr "社交"
+
+msgid "CDN"
+msgstr "CDN"
+
+msgid "PCDN"
+msgstr "PCDN"
+
+msgid "P2P"
+msgstr "P2P"
+
+msgid "Gaming"
+msgstr "游戏"
+
+msgid "Cloud"
+msgstr "云服务"
+
+msgid "Captive"
+msgstr "连通性检测"
+
+msgid "AI"
+msgstr "AI"
+
+msgid "Updates"
+msgstr "更新"
+
+msgid "Streaming"
+msgstr "流媒体"
+
+msgid "Ordinary"
+msgstr "普通"
+
+msgid "Intranet"
+msgstr "内网"
+
+msgid "TypeSafe API key"
+msgstr "TypeSafe API 密钥"
+
+msgid "Optional. Enables automatic TypeSafe Jev classification. Eligible domain names are sent to TypeSafe; leave empty to disable."
+msgstr "可选。启用 TypeSafe Jev 自动分类，符合条件的域名会发送至 TypeSafe；留空则禁用。"
+
+msgid "Client"
+msgstr "客户端"
+
+msgid "Domain"
+msgstr "域名"
+
+msgid "Category"
+msgstr "分类"
+
+msgid "Client IP or hostname"
+msgstr "客户端 IP 或主机名"
+
+msgid "Domain keyword"
+msgstr "域名关键词"
+
+msgid "All categories"
+msgstr "全部分类"
+
+msgid "Apply filters"
+msgstr "应用筛选"
+
+msgid "Clear filters"
+msgstr "清空筛选"
+
+msgid "Retained queries"
+msgstr "已保留的查询"
+
+msgid "Incomplete associations; this is not a complete hourly count."
+msgstr "关联数据不完整，此数值不是该小时的完整查询量。"
+
+msgid "Filter results"
+msgstr "筛选结果"
+
+msgid "24h total: %s"
+msgstr "24小时总量：%s"
+
+msgid "Unaffected by filters"
+msgstr "不受筛选影响"
+
+msgid "Some hours are incomplete"
+msgstr "部分时段数据不完整"
+
+msgid "Historical associations unavailable."
+msgstr "旧统计没有关联信息。"
+
+msgid "Oldest associations removed at the storage limit."
+msgstr "存储已达上限，最旧的关联时段已移除。"
+
+msgid "Some records could not be associated."
+msgstr "部分记录无法关联。"

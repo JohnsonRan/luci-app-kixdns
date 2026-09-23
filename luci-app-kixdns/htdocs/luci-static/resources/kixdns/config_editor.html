@@ -8,7 +8,6 @@
     <script>(function(){var p=new URLSearchParams(location.search).get('theme');var d=p==='dark'||(p!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.classList.toggle('dark',d)})();</script>
     <link href="vendor/bootstrap-5.3.0.min.css" rel="stylesheet">
     <script src="vendor/vue-3.5.40.global.prod.js"></script>
-    <script src="vendor/mermaid-11.16.0.min.js"></script>
     <style>
         :root {
             color-scheme: light;
@@ -1524,14 +1523,28 @@
                     }
                 });
 
+                let mermaidLoading = null;
+                let flowchartRequest = 0;
+                const ensureMermaid = () => {
+                    if (window.mermaid) return Promise.resolve();
+                    if (mermaidLoading) return mermaidLoading;
+                    mermaidLoading = new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = 'vendor/mermaid-11.16.0.min.js';
+                        script.onerror = () => {
+                            script.remove();
+                            mermaidLoading = null;
+                            reject(new Error('Mermaid failed to load'));
+                        };
+                        script.onload = () => window.mermaid ? resolve() : script.onerror();
+                        document.head.appendChild(script);
+                    });
+                    return mermaidLoading;
+                };
+
                 const setEditorTheme = (dark) => {
                     darkTheme = dark === true;
                     document.documentElement.classList.toggle('dark', darkTheme);
-                    mermaid.initialize({
-                        startOnLoad: false,
-                        securityLevel: 'strict',
-                        theme: darkTheme ? 'dark' : 'default'
-                    });
                     if (currentTab.value === 'flowchart') renderFlowchart();
                 };
 
@@ -2169,10 +2182,24 @@
                     .replace(/\|/g, '｜');
 
                 const renderFlowchart = async () => {
+                    const request = ++flowchartRequest;
+                    const isCurrent = () => request === flowchartRequest && currentTab.value === 'flowchart' && mermaidRef.value;
                     currentTab.value = 'flowchart';
                     await nextTick();
+                    try {
+                        await ensureMermaid();
+                    } catch (e) {
+                        if (isCurrent()) mermaidRef.value.textContent = e.message;
+                        return;
+                    }
+                    if (!isCurrent()) return;
+                    mermaid.initialize({
+                        startOnLoad: false,
+                        securityLevel: 'strict',
+                        theme: darkTheme ? 'dark' : 'default'
+                    });
 
-                    const idMap = {};
+                    const idMap = Object.create(null);
                     const usedSafeIds = new Set();
                     (config.value.pipelines || []).forEach(p => {
                         let safe = makeSafeId(p.id);
@@ -2263,9 +2290,10 @@
                     if (mermaidRef.value) {
                         mermaidRef.value.innerHTML = '';
                         try {
-                            const { svg } = await mermaid.render('graphDiv' + Date.now(), graph);
-                            mermaidRef.value.innerHTML = svg;
+                            const { svg } = await mermaid.render('graphDiv' + request, graph);
+                            if (isCurrent()) mermaidRef.value.innerHTML = svg;
                         } catch (e) {
+                            if (!isCurrent()) return;
                             const errorNode = document.createElement('div');
                             errorNode.className = 'text-danger';
                             errorNode.textContent = 'Error rendering graph: ' + e.message;
@@ -2274,12 +2302,6 @@
                         }
                     }
                 };
-
-                mermaid.initialize({
-                    startOnLoad: false,
-                    securityLevel: 'strict',
-                    theme: darkTheme ? 'dark' : 'default'
-                });
 
                 // Initialize with default JSON
                 rawJson.value = toCleanJsonString(config.value);

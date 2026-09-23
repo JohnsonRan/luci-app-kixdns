@@ -1,0 +1,746 @@
+#!/bin/sh
+# 24h kixdns query stats from dns_response logs.
+# Checkpoint changed TSVs on fold; snapshots only write to tmpfs.
+
+umask 077
+LC_ALL=C
+export LC_ALL
+
+LOG=${KIXDNS_LOG:-/tmp/kixdns.log}
+STATEDIR=${KIXDNS_STATEDIR:-/tmp/kixdns-stats}
+PERSISTDIR=${KIXDNS_PERSISTDIR:-/etc/kixdns}
+LIVE=$STATEDIR/stats.tsv
+CLF=$STATEDIR/classify.tsv
+PLIVE=$PERSISTDIR/stats.tsv
+PCLF=$PERSISTDIR/classify.tsv
+# ponytail: one systemone call; questions run in parallel. Cap 32 — criteria repeats per question.
+BATCH=${KIXDNS_CLASSIFY_BATCH:-16}
+case $BATCH in
+	''|*[!0-9]*|????*) BATCH=16 ;;
+esac
+[ "$BATCH" -gt 32 ] && BATCH=32
+[ "$BATCH" -lt 1 ] && BATCH=1
+API=${KIXDNS_TYPESAFE_URL:-https://api.typesafe.ai/v1/systemone}
+CRITERIA='{"ads":"Ad networks, ad CDNs, advertising measurement","trackers":"Analytics, telemetry, fingerprinting","malware":"Malware distribution or C2","phishing":"Phishing or scam","adult":"Pornography or adult","social":"Social networks","cdn":"Generic commercial CDN or static hosting, not residential","pcdn":"Commercial residential/P2P CDN that shares home uplink (Xunlei PCDN, video platform PCDN). Not BitTorrent.","p2p":"BitTorrent, DHT, magnet, generic P2P file sharing. Not commercial PCDN.","gaming":"Game platforms, launchers, matchmaking","cloud":"Cloud provider APIs (AWS, Azure, Aliyun, Tencent Cloud)","captive":"Captive-portal or connectivity checks (detectportal, generate_204)","ai":"AI chat/API hosts (OpenAI, Gemini, Claude, and similar)","update":"OS or application updates","streaming":"Video or audio streaming services","ok":"Ordinary content or unknown benign"}'
+
+cmd=${1:-snapshot}
+arg=${2:-}
+
+mkdir -p "$STATEDIR" && chmod 0700 "$STATEDIR" || exit 1
+trap 'rm -f "$STATEDIR/"*.$$' EXIT
+trap 'exit 1' HUP INT TERM
+
+json_err() {
+	printf '{"error":"%s","did":0,"pending":0}\n' "$1"
+}
+
+hour_keys() {
+	now=$(date +%s)
+	keys=$(awk -v now="$now" 'BEGIN {
+		for (i = 23; i >= 0; i--)
+			print strftime("%Y-%m-%dT%H", now - i * 3600)
+	}' 2>/dev/null) || keys=
+	if [ "$(printf '%s\n' "$keys" | awk 'NF{n++} END{print n+0}')" -eq 24 ]; then
+		printf '%s\n' "$keys"
+		return 0
+	fi
+	i=23
+	while [ "$i" -ge 0 ]; do
+		t=$((now - i * 3600))
+		k=$(date -d "@$t" +%Y-%m-%dT%H 2>/dev/null) || \
+			k=$(date -D '%s' -d "$t" +%Y-%m-%dT%H 2>/dev/null) || \
+			k=$(date +%Y-%m-%dT%H)
+		printf '%s\n' "$k"
+		i=$((i - 1))
+	done
+}
+
+load_persist() {
+	if [ ! -f "$LIVE" ]; then
+		if [ -f "$PLIVE" ]; then cp "$PLIVE" "$LIVE" || return 1; else : > "$LIVE" || return 1; fi
+	fi
+	if [ ! -f "$CLF" ]; then
+		if [ -f "$PCLF" ]; then cp "$PCLF" "$CLF" || return 1; else : > "$CLF" || return 1; fi
+	fi
+}
+
+persist_file() {
+	cmp -s "$1" "$2" && return 0
+	mkdir -p "$PERSISTDIR" || return 1
+	if cp "$1" "$2.$$" && mv -f "$2.$$" "$2"; then return 0; fi
+	rm -f "$2.$$"
+	return 1
+}
+
+persist() {
+	persist_file "$LIVE" "$PLIVE" && persist_file "$CLF" "$PCLF"
+}
+
+typesafe_key() {
+	if [ -n "${KIXDNS_TYPESAFE_KEY:-}" ]; then
+		printf '%s' "$KIXDNS_TYPESAFE_KEY"
+		return 0
+	fi
+	uci -q get kixdns.main.typesafe_api_key 2>/dev/null || true
+}
+
+norm_qname() {
+	printf '%s' "$1" | awk '{
+		s = tolower($0)
+		sub(/\.$/, "", s)
+		print s
+	}'
+}
+
+valid_qname() {
+	printf '%s\n' "$1" | awk -F '.' '
+		NR != 1 || length($0) == 0 || length($0) > 253 || $0 ~ /[^A-Za-z0-9._-]/ { exit 1 }
+		{ for (i = 1; i <= NF; i++) if ($i == "" || length($i) > 63 || $i ~ /^-|-$/) exit 1 }
+		END { if (!NR) exit 1 }
+	'
+}
+
+# ponytail: fixed intranet suffixes. Not a PSL and not sibling matching.
+local_qname() {
+	case $1 in
+		localhost|localdomain|lan|local|home|internal|intranet|arpa|\
+		*.lan|*.local|*.home|*.internal|*.intranet|*.localdomain|*.arpa)
+			return 0 ;;
+		*.*) return 1 ;;
+		*) return 0 ;;
+	esac
+}
+
+keep_hours() {
+	[ -n "${KEEP_HOURS:-}" ] && { printf '%s' "$KEEP_HOURS"; return 0; }
+	KEEP_HOURS=$(hour_keys | tr '\n' ' ')
+	printf '%s' "$KEEP_HOURS"
+}
+
+ingest_awk() {
+	awk -v keep="$keep" -v bytes="$complete" -v tsvfile="$LIVE" -F '\t' '
+	BEGIN {
+		n = split(keep, KH, " ")
+		for (i = 1; i <= n; i++) if (KH[i] != "") KEEP[KH[i]] = 1
+	}
+	function bump(kind, hour, key, n, cap,    id, uk) {
+		if (!KEEP[hour]) return
+		id = kind SUBSEP hour SUBSEP key
+		if (!(id in cnt) && cap) {
+			uk = kind SUBSEP hour
+			# ponytail: bound each hourly breakdown to 100 keys, not exact heavy hitters.
+			if (uniq[uk] >= 100) { bump("limit", hour, "-", n, 0); return }
+			uniq[uk]++
+		}
+		cnt[id] += n
+		kinds[id] = kind
+		hours[id] = hour
+		keys[id] = key
+	}
+	function fields(line,    token, key, value, p) {
+		for (key in F) delete F[key]
+		while (match(line, /(^|[ \t])[A-Za-z_][A-Za-z0-9_.]*=("([^"\\]|\\.)*"|[^ \t"]+)/)) {
+			token = substr(line, RSTART, RLENGTH)
+			line = substr(line, RSTART + RLENGTH)
+			sub(/^[ \t]/, "", token)
+			p = index(token, "=")
+			key = substr(token, 1, p - 1)
+			value = substr(token, p + 1)
+			if (substr(value, 1, 1) == "\"") value = substr(value, 2, length(value) - 2)
+			if (value !~ /[[:cntrl:]]/) F[key] = value
+		}
+	}
+	function hour_of(line,    p) {
+		if (match(line, /^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}/)) {
+			p = substr(line, RSTART, RLENGTH)
+			sub(/ /, "T", p)
+			return p
+		}
+		return ""
+	}
+	function norm(s) {
+		s = tolower(s)
+		sub(/\.$/, "", s)
+		return s
+	}
+	FILENAME == tsvfile {
+		if (NF == 4 && KEEP[$2] && $4 ~ /^[0-9]+$/)
+			bump($1, $2, $3, $4 + 0, $1 ~ /^(qname|client|upstream|pipeline|qtype|rcode)$/)
+		next
+	}
+	{
+		consumed += length($0) + 1
+		if (consumed > bytes) next
+		gsub(/\033\[[0-9;]*m/, "")
+		fields($0)
+		if (F["event"] != "dns_response") next
+		qn = norm(F["qname"])
+		if (qn == "") next
+		h = hour_of($0)
+		bump("q", h, "-", 1, 0)
+		if (F["cache"] == "true") bump("cache", h, "-", 1, 0)
+		rc = F["rcode"]
+		if (rc != "" && rc != "NoError") bump("err", h, "-", 1, 0)
+		bump("qname", h, qn, 1, 1)
+		cip = F["client_ip"]
+		if (cip != "") bump("client", h, cip, 1, 1)
+		up = F["upstream"]
+		if (up != "") bump("upstream", h, up, 1, 1)
+		pl = F["pipeline"]
+		if (pl != "") bump("pipeline", h, pl, 1, 1)
+		qt = F["qtype"]
+		if (qt != "") bump("qtype", h, qt, 1, 1)
+		if (rc != "") bump("rcode", h, rc, 1, 1)
+	}
+	END {
+		for (id in cnt)
+			printf "%s\t%s\t%s\t%d\n", kinds[id], hours[id], keys[id], cnt[id]
+	}' "$LIVE" "$1"
+}
+
+fingerprint() {
+	start=$(( $1 > 128 ? $1 - 128 : 0 ))
+	checksum=$(tail -c "+$((start + 1))" "$LOG" | head -c "$(( $1 - start ))" | "${2:-md5sum}") || return 1
+	read -r digest suffix extra <<EOF
+$checksum
+EOF
+	[ -n "$digest" ] && [ -n "$suffix" ] && [ -z "$extra" ] || return 1
+	printf '%s:%s\n' "$digest" "${suffix#\*}"
+}
+
+ingest() {
+	load_persist || return 1
+	# Keep the cursor first so idle polls do not scan the TSV just to find it.
+	IFS='	' read -r row oldid offset mark oldkeep < "$LIVE" || true
+	if [ "$row" != cursor ]; then
+		# Accept checkpoints from before the cursor header/window was introduced.
+		set -- $(awk -F '\t' '$1 == "cursor" { print $2, $3, $4; exit }' "$LIVE")
+		oldid=${1:-none} offset=${2:-0} mark=${3:-none} oldkeep=
+	fi
+	# The log stays on tmpfs; accept legacy device:inode IDs without replaying it.
+	oldid=${oldid##*:}
+	case $offset in ''|*[!0-9]*|????????????*) offset=0; oldkeep= ;; esac
+	keep=$(keep_hours)
+	id=none size=0
+	if [ -f "$LOG" ]; then
+		if command -v stat >/dev/null 2>&1; then
+			metadata=$(stat -L -c '%i %s' "$LOG") || return 1
+			set -- $metadata
+			[ "$#" -eq 2 ] || return 1
+			id=$1 size=$2
+		else
+			# OpenWrt disables stat by default. Numeric long ls gives inode and size
+			# without scanning the log; read only the fixed columns, not its filename.
+			metadata=$(ls -lndiL "$LOG") || return 1
+			read -r id permissions links owner group size name <<EOF
+$metadata
+EOF
+		fi
+		case "$id:$size" in :*|*:|*[!0-9:]*) return 1 ;; esac
+	fi
+	if [ "$id" != "$oldid" ] || [ "$size" -lt "$offset" ]; then
+		offset=0; oldkeep=
+	elif [ "$offset" -gt 0 ]; then
+		case "$mark" in
+			*:-)
+				current=$(fingerprint "$offset") || return 1
+				[ "$current" = "$mark" ] || { offset=0; oldkeep=; }
+				;;
+			*:[0-9]*)
+				# cksum is optional too. Verify old CRCs when available; otherwise
+				# migrate by inode/size once, retaining the offset rather than replaying.
+				if command -v cksum >/dev/null 2>&1; then
+					current=$(fingerprint "$offset" cksum) || return 1
+					[ "$current" = "$mark" ] || offset=0
+				fi
+				oldkeep=
+				;;
+			*) offset=0; oldkeep= ;;
+		esac
+	fi
+	# Still validate the inode and boundary bytes; file size alone misses rotations.
+	[ "$size" -eq "$offset" ] && [ "$keep" = "$oldkeep" ] && return 0
+
+	chunk=$STATEDIR/chunk.$$
+	: > "$chunk" || return 1
+	if [ "$size" -gt "$offset" ]; then
+		# Bound the read to this snapshot; newly appended bytes belong to the next fold.
+		tail -c "+$((offset + 1))" "$LOG" | head -c "$((size - offset))" > "$chunk" || return 1
+	fi
+	complete=$(wc -c < "$chunk")
+	if [ "$complete" -gt 0 ] && [ "$(tail -c 1 "$chunk" | wc -l)" -eq 0 ]; then
+		complete=$((complete - $(tail -n 1 "$chunk" | wc -c)))
+	fi
+	offset=$((offset + complete))
+	mark=none
+	[ "$offset" -eq 0 ] || { mark=$(fingerprint "$offset") || return 1; }
+	tmp=$LIVE.$$
+	aggregate=$STATEDIR/aggregate.$$
+	ingest_awk "$chunk" > "$aggregate" || return 1
+	printf 'cursor\t%s\t%s\t%s\t%s\n' "$id" "$offset" "$mark" "$keep" > "$tmp" || return 1
+	sort "$aggregate" >> "$tmp" || return 1
+	if ! cmp -s "$tmp" "$LIVE"; then mv -f "$tmp" "$LIVE" || return 1; fi
+	rm -f "$chunk" "$tmp" "$aggregate"
+}
+
+build_hostmap() {
+	out=$1
+	: > "$out"
+	leases=${KIXDNS_DHCP_LEASES:-/tmp/dhcp.leases}
+	hosts=${KIXDNS_HOSTS:-/etc/hosts}
+	odhcp=${KIXDNS_ODHCPD:-/tmp/hosts/odhcpd}
+	[ -f "$leases" ] && awk 'NF >= 4 && $3 != "" && $4 != "" && $4 != "*" { print $3 "\t" $4 }' "$leases" >> "$out"
+	for src in "$odhcp" "$hosts"; do
+		[ -f "$src" ] || continue
+		awk -F '[ \t]+' 'NF >= 2 && $1 ~ /^[0-9a-fA-F.:]+$/ && $2 != "" && $2 !~ /^(localhost|ip6-.*)$/ { print $1 "\t" $2 }' "$src" >> "$out"
+	done
+}
+
+snapshot_json() {
+	keep=$(keep_hours)
+	nowh=$(printf '%s\n' $keep | awk 'NF{h=$0} END{print h}')
+	key=$(typesafe_key)
+	enabled=0
+	[ -n "$key" ] && enabled=1
+	[ -f "$LIVE" ] || : > "$LIVE"
+	[ -f "$CLF" ] || : > "$CLF"
+	hostmap=$STATEDIR/host.map
+	build_hostmap "$hostmap"
+	awk -v keep="$keep" -v nowh="$nowh" -v enabled="$enabled" -v clffile="$CLF" -v hostfile="$hostmap" -F '\t' '
+	BEGIN {
+		n = split(keep, KH, " ")
+		for (i = 1; i <= n; i++) if (KH[i] != "") { KEEP[KH[i]] = 1; HORDER[++nh] = KH[i] }
+	}
+	function is_local(q) {
+		return !index(q, ".") || q ~ /\.(lan|local|home|internal|intranet|localdomain|arpa)$/
+	}
+	function resolved(q,    p) {
+		if (is_local(q)) return ""
+		if (q in cat) return q
+		p = q
+		while (index(p, ".")) {
+			p = substr(p, index(p, ".") + 1)
+			if (index(p, ".") && (p in cat)) return p
+		}
+		return ""
+	}
+	function js(s,    out, i, c, j) {
+		out = "\""
+		for (i = 1; i <= length(s); i++) {
+			c = substr(s, i, 1)
+			if (c == "\\" || c == "\"") c = "\\" c
+			else if (c ~ /[[:cntrl:]]/) {
+				for (j = 1; j < 32; j++) if (c == sprintf("%c", j)) break
+				c = sprintf("\\u%04x", j == 32 ? 127 : j)
+			}
+			out = out c
+		}
+		return out "\""
+	}
+	function rankadd(kind, n, key,    i, j) {
+		for (i = 1; i <= 20; i++) {
+			if (Rnk[kind, i] == "" || n > (Rnv[kind, i] + 0) || (n == Rnv[kind, i] && key < Rnk[kind, i])) {
+				for (j = 20; j > i; j--) {
+					Rnv[kind, j] = Rnv[kind, j - 1]
+					Rnk[kind, j] = Rnk[kind, j - 1]
+				}
+				Rnv[kind, i] = n
+				Rnk[kind, i] = key
+				return
+			}
+		}
+	}
+	FILENAME == hostfile {
+		if (NF >= 2 && $1 != "" && !($1 in host))
+			host[$1] = $2
+		next
+	}
+	FILENAME == clffile {
+		if (NF >= 2 && $1 != "") {
+			cat[$1] = $2
+			conf[$1] = $3
+			cached++
+		}
+		next
+	}
+	NF >= 4 && KEEP[$2] {
+		kind = $1; hour = $2; key = $3; n = $4 + 0
+		if (kind == "q") { Qh[hour] += n; TQ += n }
+		else if (kind == "cache") { Ch[hour] += n; TC += n }
+		else if (kind == "err") { TE += n }
+		else if (kind == "limit") limited = 1
+		else if (kind == "qname") {
+			Sq[key] += n
+			if (!(key in Uq)) { Uq[key] = 1; unique++ }
+			rk = resolved(key)
+			if (rk != "") Ccat[cat[rk]] += n
+			else if (is_local(key)) Ccat["lan"] += n
+			else { Ccat["pending"] += n; if (!(key in Pend)) { Pend[key] = 1; pending++ } }
+		}
+		else if (kind == "client") Sc[key] += n
+		else if (kind == "upstream") Su[key] += n
+		else if (kind == "pipeline") Sp[key] += n
+		else if (kind == "qtype") St[key] += n
+		else if (kind == "rcode") Sr[key] += n
+	}
+	END {
+		for (k in Sq) rankadd("qname", Sq[k], k)
+		for (k in Sc) rankadd("client", Sc[k], k)
+		for (k in Su) rankadd("upstream", Su[k], k)
+		for (k in Sp) rankadd("pipeline", Sp[k], k)
+		printf "{"
+		printf "\"until\":%s,", js(nowh)
+		printf "\"queries\":%d,", TQ + 0
+		printf "\"cache_hits\":%d,", TC + 0
+		printf "\"errors\":%d,", TE + 0
+		printf "\"unique\":%d,", unique + 0
+		printf "\"limited\":%s,", limited ? "true" : "false"
+		printf "\"hours\":["
+		for (i = 1; i <= nh; i++) {
+			h = HORDER[i]
+			if (i > 1) printf ","
+			printf "{\"t\":%s,\"q\":%d}", js(h), Qh[h] + 0
+		}
+		printf "],"
+		printf "\"top_qname\":["
+		for (i = 1; i <= 20 && Rnk["qname", i] != ""; i++) {
+			if (i > 1) printf ","
+			k = Rnk["qname", i]
+			printf "[%s,%d", js(k), Rnv["qname", i] + 0
+			rk = resolved(k)
+			if (rk != "") printf ",%s,%.4g", js(cat[rk]), conf[rk] + 0
+			else if (is_local(k)) printf ",\"lan\",1"
+			printf "]"
+		}
+		printf "],"
+		printf "\"top_client\":["
+		for (i = 1; i <= 20 && Rnk["client", i] != ""; i++) {
+			if (i > 1) printf ","
+			k = Rnk["client", i]
+			printf "[%s,%d", js(k), Rnv["client", i] + 0
+			if (k in host) printf ",%s", js(host[k])
+			printf "]"
+		}
+		printf "],"
+		printf "\"top_upstream\":["
+		for (i = 1; i <= 20 && Rnk["upstream", i] != ""; i++) {
+			if (i > 1) printf ","
+			printf "[%s,%d]", js(Rnk["upstream", i]), Rnv["upstream", i] + 0
+		}
+		printf "],"
+		printf "\"top_pipeline\":["
+		for (i = 1; i <= 20 && Rnk["pipeline", i] != ""; i++) {
+			if (i > 1) printf ","
+			printf "[%s,%d]", js(Rnk["pipeline", i]), Rnv["pipeline", i] + 0
+		}
+		printf "],"
+		printf "\"qtype\":{"
+		sep = 0
+		for (k in St) {
+			if (sep++) printf ","
+			printf "%s:%d", js(k), St[k] + 0
+		}
+		printf "},"
+		printf "\"rcode\":{"
+		sep = 0
+		for (k in Sr) {
+			if (sep++) printf ","
+			printf "%s:%d", js(k), Sr[k] + 0
+		}
+		printf "},"
+		printf "\"cats\":{"
+		sep = 0
+		for (k in Ccat) {
+			if (sep++) printf ","
+			printf "%s:%d", js(k), Ccat[k] + 0
+		}
+		printf "},"
+		printf "\"classify\":{\"enabled\":%s,\"cached\":%d,\"pending\":%d}", enabled ? "true" : "false", cached + 0, pending + 0
+		printf "}\n"
+	}' "$hostmap" "$CLF" "$LIVE"
+}
+
+in_stats() {
+	keep=$(keep_hours)
+	awk -F '\t' -v q="$1" -v keep="$keep" '
+		BEGIN { n = split(keep, H, " "); for (i = 1; i <= n; i++) KEEP[H[i]] = 1 }
+		$1 == "qname" && KEEP[$2] && $3 == q { found = 1; exit }
+		END { exit found ? 0 : 1 }
+	' "$LIVE"
+}
+
+# ponytail: child inherits a cached or same-batch parent that still has a dot. No sibling match, no PSL.
+pending_qnames() {
+	keep=$(keep_hours)
+	awk -F '\t' -v keep="$keep" -v clffile="$CLF" '
+		function is_local(q) {
+			return !index(q, ".") || q ~ /\.(lan|local|home|internal|intranet|localdomain|arpa)$/
+		}
+		function valid(q,    a, n, i) {
+			if (length(q) > 253 || q ~ /[^a-z0-9._-]/) return 0
+			n = split(q, a, ".")
+			for (i = 1; i <= n; i++) if (a[i] == "" || length(a[i]) > 63 || a[i] ~ /^-|-$/) return 0
+			return 1
+		}
+		function covered(q,    p) {
+			if (is_local(q) || (q in seen)) return 1
+			p = q
+			while (index(p, ".")) {
+				p = substr(p, index(p, ".") + 1)
+				if (index(p, ".") && (p in seen)) return 1
+			}
+			return 0
+		}
+		function pending_parent(q,    p) {
+			p = q
+			while (index(p, ".")) {
+				p = substr(p, index(p, ".") + 1)
+				if (index(p, ".") && (p in cnt)) return 1
+			}
+			return 0
+		}
+		BEGIN { n = split(keep, H, " "); for (i = 1; i <= n; i++) KEEP[H[i]] = 1 }
+		FILENAME == clffile { if (NF >= 2 && $1 != "") seen[$1] = 1; next }
+		$1 == "qname" && KEEP[$2] && valid($3) && !covered($3) { cnt[$3] += $4 + 0 }
+		END { for (q in cnt) if (!pending_parent(q)) print cnt[q] "\t" q }
+	' "$CLF" "$LIVE" | sort -nr | awk -F '\t' 'NF >= 2 { print $2 }'
+}
+
+write_class() {
+	q=$1 cat=$2 conf=$3 model=$4
+	tmp=$CLF.$$
+	awk -F '\t' -v q="$q" -v cat="$cat" -v conf="$conf" -v model="$model" '
+		$1 != q { print }
+		END { printf "%s\t%s\t%s\t%s\n", q, cat, conf, model }
+	' "$CLF" > "$tmp" && mv -f "$tmp" "$CLF"
+}
+
+known_cat() {
+	case $1 in
+		ads|trackers|malware|phishing|adult|social|cdn|pcdn|p2p|gaming|cloud|captive|ai|update|streaming|ok) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+write_classify_body() {
+	q=$1
+	printf '{"state":"%s","model":"jev-latest","questions":{"cat":{"type":"choice","instructions":"Classify this DNS domain by typical client intent. Pick one.","criteria":%s}}}\n' "$q" "$CRITERIA" > "$2"
+}
+
+# Two bounded attempts fit within rpcd exec timeout, without blocking state readers.
+post_systemone() {
+	req=$1
+	body=$2
+	hdr=$STATEDIR/classify.hdr.$$
+	auth=$STATEDIR/classify.auth.$$
+	case $key in *[![:graph:]]*) printf 'bad_key'; return ;; esac
+	printf 'Authorization: Bearer %s\n' "$key" > "$auth" || return 1
+	try=0
+	code=000
+	while [ "$try" -lt 2 ]; do
+		code=$(curl -sS --connect-timeout 5 --max-time 8 --max-filesize 131072 \
+			-D "$hdr" \
+			-H "@$auth" \
+			-H "Content-Type: application/json" \
+			--data-binary "@$req" -o "$body" -w '%{http_code}' "$API") || code=000
+		case $code in
+			200)
+				rm -f "$hdr" "$auth"
+				printf '%s' "$code"
+				return 0
+				;;
+			429|529|000)
+				try=$((try + 1))
+				[ "$try" -ge 2 ] && break
+				wait=1
+				if [ -f "$hdr" ]; then
+					w=$(awk 'tolower($1) == "retry-after:" { gsub(/\r/, "", $2); print $2; exit }' "$hdr")
+					case $w in
+						''|*[!0-9]*) ;;
+						*)
+							[ "${#w}" -gt 1 ] || [ "$w" -le 2 ] || w=2
+							[ "${#w}" -le 1 ] || w=2
+							[ "$w" -gt 0 ] && wait=$w
+							;;
+					esac
+				fi
+				sleep "$wait"
+				;;
+			*)
+				break
+				;;
+		esac
+	done
+	rm -f "$hdr" "$auth"
+	printf '%s' "$code"
+}
+
+write_batch_body() {
+	list=$1
+	out=$2
+	i=0
+	printf '%s' '{"state":{"domains":[' > "$out"
+	while IFS= read -r q; do
+		[ -n "$q" ] || continue
+		[ "$i" -gt 0 ] && printf ',' >> "$out"
+		printf '"%s"' "$q" >> "$out"
+		i=$((i + 1))
+	done < "$list"
+	printf '%s' ']},"model":"jev-latest","questions":{' >> "$out"
+	i=0
+	while IFS= read -r q; do
+		[ -n "$q" ] || continue
+		[ "$i" -gt 0 ] && printf ',' >> "$out"
+		printf '"d%d":{"type":"choice","instructions":"Classify `domains[%d]` by typical client intent. Pick one.","criteria":%s}' "$i" "$i" "$CRITERIA" >> "$out"
+		i=$((i + 1))
+	done < "$list"
+	printf '}}\n' >> "$out"
+}
+
+parse_answer() {
+	choice=$(jsonfilter -i "$1" -e "@.answers.$2.choice" 2>/dev/null) || return 1
+	known_cat "$choice" || return 1
+	conf=$(jsonfilter -i "$1" -e "@.answers.$2.confidence" 2>/dev/null) || return 1
+	# Reject malformed, non-finite and out-of-range confidence before writing TSV/JSON.
+	printf '%s\n' "$conf" | awk '
+		NR != 1 || $0 !~ /^[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$/ || $0 + 0 > 1 { exit 1 }
+		END { if (!NR) exit 1 }
+	'
+}
+
+parse_batch() {
+	idx=0
+	while IFS= read -r domain; do
+		if parse_answer "$1" "d$idx"; then
+			printf '%s\t%s\t%s\tjev-latest\n' "$domain" "$choice" "$conf"
+		fi
+		idx=$((idx + 1))
+	done < "$2"
+}
+
+apply_hits() {
+	hits=$1
+	tmp=$CLF.$$
+	awk -F '\t' -v hits="$hits" '
+		FILENAME == hits {
+			if (NF >= 2 && $1 != "") {
+				cat[$1] = $2; conf[$1] = $3; model[$1] = $4
+				if (!($1 in seen)) ord[++n] = $1
+				seen[$1] = 1
+			}
+			next
+		}
+		!($1 in cat) { print }
+		END {
+			for (i = 1; i <= n; i++)
+				printf "%s\t%s\t%s\t%s\n", ord[i], cat[ord[i]], conf[ord[i]], model[ord[i]]
+		}
+	' "$hits" "$CLF" > "$tmp" && mv -f "$tmp" "$CLF"
+}
+
+classify_one() {
+	q=$1
+	mode=${2:-}
+	key=$(typesafe_key)
+	[ -n "$key" ] || { json_err "no_key"; return 0; }
+	valid_qname "$q" || { json_err "bad_qname"; return 0; }
+	[ "$mode" = probe ] || in_stats "$q" || { json_err "not_in_stats"; return 0; }
+	if local_qname "$q"; then
+		printf '{"ok":true,"qname":"%s","cat":"lan","conf":1,"did":0}\n' "$q"
+		return 0
+	fi
+
+	reqf=$STATEDIR/classify.req.$$
+	bodyf=$STATEDIR/classify.body.$$
+	write_classify_body "$q" "$reqf" || return 1
+	flock -u 9 || return 1
+	code=$(post_systemone "$reqf" "$bodyf")
+	rm -f "$reqf"
+	if [ "$code" != "200" ]; then
+		rm -f "$bodyf"
+		json_err "http_$code"
+		return 0
+	fi
+	parse_answer "$bodyf" cat || { json_err "bad_response"; return 0; }
+	rm -f "$bodyf"
+	if [ "$mode" != probe ]; then
+		flock -x 9 || return 1
+		write_class "$q" "$choice" "$conf" jev-latest && persist_file "$CLF" "$PCLF" || return 1
+	fi
+	printf '{"ok":true,"qname":"%s","cat":"%s","conf":%s,"did":1}\n' "$q" "$choice" "$conf"
+}
+
+classify_batch() {
+	key=$(typesafe_key)
+	[ -n "$key" ] || { json_err "no_key"; return 0; }
+	[ -f "$CLF" ] || : > "$CLF"
+	list=$STATEDIR/classify.list.$$
+	pending_qnames | awk -v n="$BATCH" 'NR <= n { print }' > "$list"
+	if [ ! -s "$list" ]; then
+		rm -f "$list"
+		printf '{"ok":true,"did":0,"pending":0}\n'
+		return 0
+	fi
+	reqf=$STATEDIR/classify.req.$$
+	bodyf=$STATEDIR/classify.body.$$
+	hits=$STATEDIR/classify.hits.$$
+	write_batch_body "$list" "$reqf" || return 1
+	flock -u 9 || return 1
+	code=$(post_systemone "$reqf" "$bodyf")
+	rm -f "$reqf"
+	if [ "$code" != "200" ]; then
+		rm -f "$bodyf" "$list" "$hits"
+		json_err "http_$code"
+		return 0
+	fi
+	parse_batch "$bodyf" "$list" > "$hits"
+	rm -f "$bodyf" "$list"
+	did=$(awk 'NF >= 2 { c++ } END { print c + 0 }' "$hits")
+	if [ "$did" -eq 0 ]; then
+		rm -f "$hits"
+		json_err "bad_response"
+		return 0
+	fi
+	flock -x 9 || return 1
+	apply_hits "$hits" && persist_file "$CLF" "$PCLF" || return 1
+	rm -f "$hits"
+	left=$(pending_qnames | awk 'NF { c++ } END { print c + 0 }')
+	printf '{"ok":true,"did":%d,"pending":%d}\n' "$did" "$left"
+}
+
+case "$cmd" in
+	snapshot|fold|clear|classify|check) ;;
+	*) printf 'usage: kixdns-stats snapshot|fold|clear|classify [qname]|check\n' >&2; exit 1 ;;
+esac
+
+# BusyBox flock is enabled by default on supported OpenWrt releases. Kernel releases
+# locks on exit, including SIGKILL; never unlink a lock file while callers may wait.
+case "$cmd" in
+	classify|check)
+		exec 8>"$STATEDIR/classify.lock" || exit 1
+		flock -n 8 || { json_err busy; exit 0; }
+		;;
+esac
+exec 9>"$STATEDIR/state.lock" || exit 1
+flock -x 9 || exit 1
+KEEP_HOURS=$(hour_keys | tr '\n' ' ')
+ingest || { json_err ingest_failed; exit 1; }
+
+case "$cmd" in
+	snapshot) snapshot_json ;;
+	fold) persist ;;
+	clear)
+		# Fail closed: never erase the source log if checkpointing failed.
+		persist && : > "$LOG" || exit 1
+		# Reset the cursor while holding the same lock used by snapshots.
+		ingest && persist
+		;;
+	classify)
+		if [ -n "$arg" ]; then
+			classify_one "$(norm_qname "$arg")"
+		else
+			classify_batch
+		fi
+		;;
+	check) classify_one example.com probe ;;
+esac

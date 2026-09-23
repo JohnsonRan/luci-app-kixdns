@@ -1,0 +1,66 @@
+#!/bin/sh
+# Public interface. Go owns all state, classification selection and validation.
+# The private _post operation only supplies the bounded HTTP transport.
+umask 077
+LC_ALL=C
+export LC_ALL
+CORE=${KIXDNS_STATS_CORE:-/usr/libexec/kixdns-stats-core}
+API=${KIXDNS_TYPESAFE_URL:-https://api.typesafe.ai/v1/systemone}
+cmd=${1:-snapshot}
+case "$cmd" in
+ snapshot)
+  [ "$#" -le 2 ] || exit 1
+  if [ -n "${2:-}" ]; then exec "$CORE" snapshot "$2"; else exec "$CORE" snapshot; fi ;;
+ fold|clear)
+  [ "$#" -eq 1 ] || exit 1
+  exec "$CORE" "$cmd" ;;
+ classify)
+  [ "$#" -le 2 ] || exit 1
+  exec "$CORE" classify "$0" "${2:-}" ;;
+ check)
+  [ "$#" -eq 1 ] || exit 1
+  exec "$CORE" check "$0" ;;
+ _post)
+  [ "$#" -eq 3 ] || exit 1 ;;
+ *) printf 'usage: kixdns-stats snapshot [filters]|fold|clear|classify [qname]|check\n' >&2; exit 1 ;;
+esac
+
+req=$2
+body=$3
+hdr=$req.hdr
+auth=$req.auth
+trap 'rm -f "$hdr" "$auth"' EXIT
+trap 'exit 1' HUP INT TERM
+key=${KIXDNS_TYPESAFE_KEY:-}
+[ -n "$key" ] || key=$(uci -q get kixdns.main.typesafe_api_key 2>/dev/null || true)
+[ -n "$key" ] || { printf no_key; exit 0; }
+case $key in *[![:graph:]]*) printf bad_key; exit 0 ;; esac
+printf 'Authorization: Bearer %s\n' "$key" > "$auth" || exit 1
+try=0
+code=000
+# No state/database lock is held by either process during HTTP.
+while [ "$try" -lt 2 ]; do
+ code=$(curl -sS --connect-timeout 5 --max-time 8 --max-filesize 131072 \
+  -D "$hdr" -H "@$auth" -H 'Content-Type: application/json' \
+  --data-binary "@$req" -o "$body" -w '%{http_code}' "$API") || code=000
+ case $code in
+  200) break ;;
+  429|529|000)
+   try=$((try + 1))
+   [ "$try" -ge 2 ] && break
+   wait=1
+   if [ -f "$hdr" ]; then
+    w=$(awk 'tolower($1) == "retry-after:" { gsub(/\r/, "", $2); print $2; exit }' "$hdr")
+    case $w in
+     ''|*[!0-9]*) ;;
+     *)
+      [ "${#w}" -gt 1 ] || [ "$w" -le 2 ] || w=2
+      [ "${#w}" -le 1 ] || w=2
+      [ "$w" -gt 0 ] && wait=$w ;;
+    esac
+   fi
+   sleep "$wait" ;;
+  *) break ;;
+ esac
+done
+printf '%s' "$code"

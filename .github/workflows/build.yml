@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - "kixdns/**"
+      - "kixdns-stats/**"
       - "luci-app-kixdns/**"
       - "Justfile"
       - "install.sh"
@@ -21,13 +22,24 @@ permissions:
 
 jobs:
   checks:
-    name: Check logs, package archives, and installer
+    name: Check native stats, views, package archives, and installer
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.x"
+          cache: false
       - run: |
+          export CGO_ENABLED=0
+          (cd kixdns-stats/src && go test -v ./... && go vet ./...)
+          export KIXDNS_STATS_CORE="$RUNNER_TEMP/kixdns-stats-core"
+          (cd kixdns-stats/src && go build -o "$KIXDNS_STATS_CORE" .)
           node tests/log.test.cjs
+          node tests/stats.test.cjs
+          node tests/views.test.cjs
           node tests/packages.test.cjs
+          node tests/trial.test.cjs
 
   build-core:
     name: Build core ${{ matrix.arch }}
@@ -52,6 +64,12 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.x"
+          cache: false
+
       - name: Install just
         uses: extractions/setup-just@v4
 
@@ -70,6 +88,20 @@ jobs:
 
       - name: Build and verify static musl binary
         run: just core-build-ci "${{ matrix.arch }}"
+
+      - name: Build static statistics helper
+        run: |
+          just stats-build "${{ matrix.arch }}"
+          ! readelf -l "dist/core/kixdns-stats-${{ matrix.arch }}" | grep -q INTERP
+          readelf -h "dist/core/kixdns-stats-${{ matrix.arch }}"
+
+      - name: Upload statistics helper
+        uses: actions/upload-artifact@v7
+        with:
+          name: kixdns-stats-${{ matrix.arch }}
+          path: dist/core/kixdns-stats-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload core binary
         uses: actions/upload-artifact@v7
@@ -117,8 +149,16 @@ jobs:
           name: kixdns-core-${{ matrix.arch.core }}
           path: kixdns/prebuilt
 
-      - name: Prepare prebuilt core
-        run: just core-stage "${{ matrix.arch.core }}"
+      - name: Download prebuilt statistics helper
+        uses: actions/download-artifact@v8
+        with:
+          name: kixdns-stats-${{ matrix.arch.core }}
+          path: kixdns-stats/prebuilt
+
+      - name: Prepare prebuilt binaries
+        run: |
+          just core-stage "${{ matrix.arch.core }}"
+          just stats-stage "${{ matrix.arch.core }}"
 
       - name: Build packages
         uses: openwrt/gh-action-sdk@main
@@ -127,7 +167,7 @@ jobs:
           FEEDNAME: kixdns
           # SDK CONFIG_ALL selects translations built by the LuCI source target.
           # package-output requires one translation package per source language.
-          PACKAGES: kixdns luci-app-kixdns
+          PACKAGES: kixdns kixdns-stats luci-app-kixdns
           NO_REFRESH_CHECK: true
 
       - name: Package build output

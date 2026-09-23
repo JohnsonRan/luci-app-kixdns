@@ -4,12 +4,12 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-kixdns
-PKG_VERSION:=1.5.5
-PKG_RELEASE:=1
+PKG_VERSION:=1.6.0
+PKG_RELEASE:=2
 
 LUCI_TITLE:=LuCI Support for KixDNS
 LUCI_DESCRIPTION:=LuCI interface for KixDNS - a high-performance DNS forwarding server
-LUCI_DEPENDS:=+kixdns +jsonfilter +kmod-nft-nat +curl
+LUCI_DEPENDS:=+kixdns +kixdns-stats +jsonfilter +kmod-nft-nat +curl
 LUCI_PKGARCH:=all
 
 # Do NOT let luci.mk run csstidy/jsmin over htdocs at build time.
@@ -20,9 +20,15 @@ LUCI_PKGARCH:=all
 LUCI_MINIFY_CSS:=0
 LUCI_MINIFY_JS:=0
 
+# Original TSV imports are retained for data protection, not runtime compatibility.
 define Package/luci-app-kixdns/conffiles
 /etc/config/kixdns
 /etc/kixdns/pipeline.json
+/etc/kixdns/stats.tsv
+/etc/kixdns/stats-import.tsv
+/etc/kixdns/stats.db
+/etc/kixdns/classify-import.tsv
+/etc/kixdns/classify.tsv
 endef
 
 include $(TOPDIR)/feeds/luci/luci.mk

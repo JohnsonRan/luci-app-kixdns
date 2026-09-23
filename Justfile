@@ -110,7 +110,23 @@ core-stage arch:
     mv "$source" "$target"; \
     chmod 0755 "$target"
 
-# Collect the core, LuCI, and all application translations into one release archive.
+# Build the pure Go statistics helper (bbolt); no C toolchain required.
+stats-build arch="x86_64":
+    @case "{{arch}}" in \
+        x86_64) goarch=amd64 ;; \
+        aarch64|aarch64_generic|aarch64_cortex-a53) goarch=arm64 ;; \
+        *) echo "Unsupported architecture: {{arch}}" >&2; exit 1 ;; \
+    esac; \
+    mkdir -p "{{dist_dir}}"; \
+    cd kixdns-stats/src; \
+    CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" GOARM64=v8.0 \
+        go build -trimpath -ldflags='-s -w' -o "../../{{dist_dir}}/kixdns-stats-{{arch}}" .
+
+stats-stage arch:
+    @mv "kixdns-stats/prebuilt/kixdns-stats-{{arch}}" "kixdns-stats/prebuilt/kixdns-stats-core"
+    @chmod 0755 kixdns-stats/prebuilt/kixdns-stats-core
+
+# Collect native packages, LuCI, and all application translations into one archive.
 package-output arch release package_ext:
     @package_dir="bin/packages/{{arch}}/kixdns"; \
     output="kixdns_{{arch}}-openwrt-{{release}}.tar.gz"; \
@@ -118,20 +134,21 @@ package-output arch release package_ext:
     trap 'rm -rf "$staging_dir"' EXIT; \
     find_package() { \
         find "$package_dir" -maxdepth 1 -type f \
-            \( -name "$1-*.{{package_ext}}" -o -name "$1_*.{{package_ext}}" \) \
+            \( -name "$1-[0-9]*.{{package_ext}}" -o -name "$1_[0-9]*.{{package_ext}}" \) \
             -print -quit; \
     }; \
     core_package="$(find_package kixdns)"; \
+    stats_package="$(find_package kixdns-stats)"; \
     luci_package="$(find_package luci-app-kixdns)"; \
     shopt -s nullglob; \
     i18n_packages=("$package_dir"/luci-i18n-kixdns-*.{{package_ext}}); \
     expected_i18n="$(find luci-app-kixdns/po -mindepth 2 -maxdepth 2 -type f -name '*.po' ! -path '*/templates/*' -printf '%h\n' | sort -u | wc -l)"; \
-    if [ -z "$core_package" ] || [ -z "$luci_package" ] || [ "${#i18n_packages[@]}" -ne "$expected_i18n" ]; then \
-        echo "Expected kixdns, luci-app-kixdns, and $expected_i18n translation packages in $package_dir (found ${#i18n_packages[@]} translations)" >&2; \
+    if [ -z "$core_package" ] || [ -z "$stats_package" ] || [ -z "$luci_package" ] || [ "${#i18n_packages[@]}" -ne "$expected_i18n" ]; then \
+        echo "Expected kixdns, kixdns-stats, luci-app-kixdns, and $expected_i18n translation packages in $package_dir (found ${#i18n_packages[@]} translations)" >&2; \
         find "$package_dir" -maxdepth 1 -type f -print >&2 || true; \
         exit 1; \
     fi; \
-    cp "$core_package" "$luci_package" "${i18n_packages[@]}" "$staging_dir/"; \
+    cp "$core_package" "$stats_package" "$luci_package" "${i18n_packages[@]}" "$staging_dir/"; \
     tar -czf "$output" -C "$staging_dir" .; \
     echo "Created $output"
 
