@@ -8,6 +8,8 @@ const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const bash = process.env.TEST_BASH || (process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : 'bash');
 const justfile = fs.readFileSync(path.join(root, 'Justfile'), 'utf8');
+assert.equal(fs.readFileSync(path.join(root, 'luci-app-kixdns/root/lib/upgrade/keep.d/kixdns'), 'utf8').trim(),
+	'/etc/kixdns/stats.db', 'firmware upgrades must preserve runtime database when keeping settings');
 const recipe = /^package-output arch release package_ext:\r?\n((?:[ \t].*(?:\r?\n|$))+)/m.exec(justfile);
 assert.ok(recipe, 'package-output recipe must exist');
 const installer = fs.readFileSync(path.join(root, 'install.sh'), 'utf8')
