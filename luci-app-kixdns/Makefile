@@ -23,7 +23,6 @@ LUCI_MINIFY_JS:=0
 define Package/luci-app-kixdns/conffiles
 /etc/config/kixdns
 /etc/kixdns/pipeline.json
-/etc/kixdns/stats.db
 endef
 
 include $(TOPDIR)/feeds/luci/luci.mk

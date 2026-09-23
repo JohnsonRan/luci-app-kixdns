@@ -46,6 +46,7 @@ clearing. HTTP is mocked; classification JSON uses the real Go parser. Local
 tests do not establish real rpcd ACL behavior or power-cut/device performance.
 SDK source builds require Go 1.25+; release packaging uses static prebuilts.
 
-The durable `/etc/kixdns/stats.db` is an OpenWrt conffile. Before upgrading,
-run `/usr/libexec/kixdns-stats fold` to checkpoint current statistics and
-classification; verify the package and a reboot before removing any backups.
+The durable `/etc/kixdns/stats.db` is created at runtime, not shipped in a
+package. Before upgrading, run `/usr/libexec/kixdns-stats fold` to checkpoint
+statistics and classification; verify the package and a reboot before removing
+any backups.
