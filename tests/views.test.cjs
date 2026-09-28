@@ -30,7 +30,7 @@ async function statsTests() {
 	const source = read('luci-app-kixdns/htdocs/luci-static/resources/view/kixdns/stats.js');
 	const attack = '<img src=x onerror=alert(1)>';
 	const stats = {
-		queries: 5, cache_hits: 2, errors: 0, unique: 1, hours: [{ t: '2026-09-22T08', q: 5 }, { t: '2026-09-22T09', q: 0 }],
+		queries: 5, cache_hits: 2, legacy_logs: false, errors: 0, unique: 1, hours: [{ t: '2026-09-22T08', q: 5 }, { t: '2026-09-22T09', q: 0 }],
 		top_qname: [[attack, 5]], top_client: [['192.0.2.1', 5, attack]], top_pipeline: [[attack, 5]],
 		top_upstream: [[attack, 5]], qtype: { [attack]: 5 }, rcode: {}, cats: {},
 		classify: { enabled: true, pending: 1 }
@@ -46,10 +46,10 @@ async function statsTests() {
 	assert.ok(nodes(page).every(n => !n.innerHTML.includes(attack)), 'no log/hostname strings interpreted as HTML');
 	const hourButtons = nodes(page).filter(n => n.attrs.class === 'kixdns-hour');
 	assert.equal(hourButtons.length, 2);
-	assert.equal(hourButtons[0].attrs['aria-label'], '2026-09-22 08:00–08:59\nQueries: 5');
+	assert.equal(hourButtons[0].attrs['aria-label'], '2026-09-22 08:00–08:59\nRetained responses: 5');
 	assert.equal(hourButtons[1].tag, 'button', 'zero-count hour remains keyboard/pointer reachable');
 	assert.equal(hourButtons[1].children[0].attrs.style, 'height:0%');
-	assert.equal(hourButtons[1].children.find(n => n instanceof Element && n.attrs.role === 'tooltip').textContent, '2026-09-22 09:00–09:59\nQueries: 0');
+	assert.equal(hourButtons[1].children.find(n => n instanceof Element && n.attrs.role === 'tooltip').textContent, '2026-09-22 09:00–09:59\nRetained responses: 0');
 	const classes = new Set();
 	let focused = false;
 	const target = { classList: { add: c => classes.add(c), remove: c => classes.delete(c) }, focus: () => { focused = true; } };
@@ -114,9 +114,9 @@ async function statsTests() {
 	const domain = nodes(form).find(n => n.attrs['aria-label'] === 'Domain keyword');
 	const category = nodes(form).find(n => n.tag === 'select');
 	const old = deferred();
-	const filtered = { ...stats, queries: 3, totals: { queries: 17 }, partial: true,
+	const filtered = { ...stats, queries: 3, cache_hits: null, legacy_logs: true, totals: { queries: 17 }, partial: true,
 		hours: [{ t: '2026-09-22T08', q: 0, partial: true }, { t: '2026-09-22T09', q: 3 }],
-		coverage: { hours: [{ legacy: 9, capacity: 5, unsupported: 1 }] }, classify: { enabled: false, pending: 0 } };
+		coverage: { hours: [{ stored: 3, legacy: 9, capacity: 4, unsupported: 1 }] }, classify: { enabled: false, pending: 0 } };
 	queue = [() => old.promise, result(filtered)];
 	const stale = callback();
 	client.value = 'laptop'; domain.value = 'ads'; category.value = 'ads';
@@ -125,11 +125,14 @@ async function statsTests() {
 	await stale;
 	assert.deepEqual(JSON.parse(argumentsSeen.at(-1)[1]), { client: 'laptop', domain: 'ads', category: 'ads' });
 	assert.ok(!page.textContent.includes('999'), 'old filter response cannot overwrite the newest selection');
-	assert.ok(page.textContent.includes('24h total: 17'), 'full totals remain a separate reference');
+	assert.ok(page.textContent.includes('24h logged responses (unfiltered): 17'), 'logged totals remain a separate reference');
+	assert.ok(page.textContent.includes('Retained details (before filters): 3 / 17'));
+	assert.ok(page.textContent.includes('Unavailable'), 'legacy rate is unknown, not 0% or 100%');
+	assert.ok(page.textContent.includes('Legacy logs may omit responses.'));
 	assert.equal(nodes(page).find(n => n.attrs.class === 'cbi-value-description kixdns-reference').attrs.title, 'Unaffected by filters');
 	const coverage = nodes(page).find(n => n.tag === 'details');
 	assert.ok(coverage && !coverage.attrs.open, 'coverage explanations start collapsed');
-	assert.equal(coverage.children[0].innerHTML, 'Some hours are incomplete');
+	assert.equal(coverage.children[0].innerHTML, 'Some response details are missing');
 	assert.ok(coverage.textContent.includes('Some associations are unavailable.'));
 	assert.ok(coverage.textContent.includes('Oldest associations removed'));
 	assert.ok(coverage.textContent.includes('Some records could not be associated.'));
@@ -142,6 +145,11 @@ async function statsTests() {
 	await nodes(form).find(n => n.tag === 'button' && n.attrs.type === 'button').attrs.click();
 	assert.deepEqual(JSON.parse(argumentsSeen.at(-1)[1]), { client: '', domain: '', category: '' });
 	assert.equal(client.value, ''); assert.equal(domain.value, ''); assert.equal(category.value, '');
+	assert.ok(page.textContent.includes('40.0%'), 'verified hit rates recover after reset');
+	queue = [result({ ...stats, cache_hits: 5, legacy_logs: undefined })];
+	await callback();
+	assert.ok(page.textContent.includes('Unavailable'), 'an old helper cannot claim a trusted rate after only the UI is upgraded');
+	assert.ok(!page.textContent.includes('100%'));
 	console.log('PASS: LuCI text safety, coalescing, focus, read-only, classification, hourly tooltip, linked filters, stale-filter race, coverage and reset');
 }
 

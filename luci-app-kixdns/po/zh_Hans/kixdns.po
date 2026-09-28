@@ -432,23 +432,23 @@ msgstr "应用筛选"
 msgid "Clear filters"
 msgstr "清空筛选"
 
-msgid "Retained queries"
-msgstr "已保留的查询"
+msgid "Retained responses"
+msgstr "已保留应答"
 
 msgid "Incomplete associations; this is not a complete hourly count."
-msgstr "关联数据不完整，此数值不是该小时的完整查询量。"
+msgstr "关联数据不完整，此数值不是该小时的完整应答量。"
 
-msgid "Filter results"
-msgstr "筛选结果"
+msgid "Retained log records"
+msgstr "保留日志记录"
 
-msgid "24h total: %s"
-msgstr "24小时总量：%s"
+msgid "24h logged responses (unfiltered): %s"
+msgstr "24 小时日志应答数（未筛选）：%s"
 
 msgid "Unaffected by filters"
 msgstr "不受筛选影响"
 
-msgid "Some hours are incomplete"
-msgstr "部分时段数据不完整"
+msgid "Some response details are missing"
+msgstr "部分应答明细已缺失"
 
 msgid "Some associations are unavailable."
 msgstr "部分关联信息不可用。"
@@ -458,3 +458,15 @@ msgstr "存储已达上限，最旧的关联时段已移除。"
 
 msgid "Some records could not be associated."
 msgstr "部分记录无法关联。"
+
+msgid "Retained responses (24h)"
+msgstr "已保留应答（24 小时）"
+
+msgid "Unavailable"
+msgstr "不可用"
+
+msgid "Retained details (before filters): %s"
+msgstr "已保留明细（筛选前）：%s"
+
+msgid "Legacy logs may omit responses. Hit rates for affected hours are unavailable; upgrade the DNS core. Missing history cannot be recovered."
+msgstr "旧格式日志可能漏记应答，相关时段的缓存命中率不可用。请更新 DNS 内核；缺失的历史数据无法补回。"

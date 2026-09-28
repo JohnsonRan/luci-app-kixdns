@@ -107,9 +107,9 @@ function hoursChart(hours) {
 	var range = hours.length ? hours[0].t.replace('T', ' ') + ':00 – ' + hours[hours.length - 1].t.replace('T', ' ') + ':00' : '';
 	return E('div', {}, [
 		E('div', { 'class': 'kixdns-hours-range' }, [ range ]),
-		E('div', { 'class': 'kixdns-hours', 'role': 'group', 'aria-label': _('Queries (24h)') }, hours.map(function (h, idx) {
+		E('div', { 'class': 'kixdns-hours', 'role': 'group', 'aria-label': _('Retained responses (24h)') }, hours.map(function (h, idx) {
 			// Use router-local hour strings, not the browser's timezone.
-			var label = String(h.t).replace('T', ' ') + ':00–' + hourClock(h.t).slice(0, 2) + ':59\n' + (h.partial ? _('Retained queries') : _('Queries')) + ': ' + Number(h.q || 0).toLocaleString();
+			var label = String(h.t).replace('T', ' ') + ':00–' + hourClock(h.t).slice(0, 2) + ':59\n' + _('Retained responses') + ': ' + Number(h.q || 0).toLocaleString();
 			if (h.partial) label += '\n' + _('Incomplete associations; this is not a complete hourly count.');
 			function showTip(ev) { ev.currentTarget.classList.remove('kixdns-tip-hidden'); }
 			return E('button', {
@@ -201,15 +201,21 @@ return view.extend({
 			var hourFocus = active && body.contains(active) ? active.getAttribute('data-hour-index') : null;
 			var tipHidden = hourFocus != null && active.classList.contains('kixdns-tip-hidden');
 			body.textContent = '';
-			body.appendChild(E('h3', {}, _('Filter results')));
+			body.appendChild(E('h3', {}, _('Retained log records')));
 			body.appendChild(E('div', { 'class': 'kixdns-stats-grid' }, [
-				card(_('Queries'), String(stats.queries || 0)),
-				card(_('Cache hit rate'), pct(stats.cache_hits || 0, stats.queries || 0)),
+				card(_('Retained responses'), String(stats.queries || 0)),
+				card(_('Cache hit rate'), typeof stats.legacy_logs === 'boolean' && typeof stats.cache_hits === 'number' ? pct(stats.cache_hits, stats.queries || 0) : _('Unavailable')),
 				card(_('Errors'), String(stats.errors || 0)),
 				card(_('Unique domains'), String(stats.unique || 0))
 			]));
 			if (stats.totals)
-				body.appendChild(E('p', { 'class': 'cbi-value-description kixdns-reference', 'title': _('Unaffected by filters') }, [ _('24h total: %s').format(Number(stats.totals.queries || 0).toLocaleString()) ]));
+				body.appendChild(E('p', { 'class': 'cbi-value-description kixdns-reference', 'title': _('Unaffected by filters') }, [ _('24h logged responses (unfiltered): %s').format(Number(stats.totals.queries || 0).toLocaleString()) ]));
+			if (stats.totals && stats.coverage && Array.isArray(stats.coverage.hours)) {
+				var retained = stats.coverage.hours.reduce(function (n, h) { return n + Number(h.stored || 0); }, 0);
+				body.appendChild(E('p', { 'class': 'cbi-value-description' }, [ _('Retained details (before filters): %s').format(retained.toLocaleString() + ' / ' + Number(stats.totals.queries || 0).toLocaleString()) ]));
+			}
+			if (stats.legacy_logs !== false)
+				body.appendChild(E('p', { 'class': 'kixdns-coverage' }, [ _('Legacy logs may omit responses. Hit rates for affected hours are unavailable; upgrade the DNS core. Missing history cannot be recovered.') ]));
 			if (stats.partial) {
 				var gaps = (stats.coverage && stats.coverage.hours) || [];
 				var reasons = [];
@@ -217,11 +223,11 @@ return view.extend({
 				if (gaps.some(function (h) { return h.capacity > 0; })) reasons.push(_('Oldest associations removed at the storage limit.'));
 				if (gaps.some(function (h) { return h.unsupported > 0; })) reasons.push(_('Some records could not be associated.'));
 				body.appendChild(E('details', { 'class': 'kixdns-coverage' }, [
-					E('summary', {}, _('Some hours are incomplete')),
+					E('summary', {}, _('Some response details are missing')),
 					E('p', {}, [ reasons.join(' ') ])
 				]));
 			}
-			body.appendChild(section(_('Queries (24h)'), hoursChart(stats.hours || [])));
+			body.appendChild(section(_('Retained responses (24h)'), hoursChart(stats.hours || [])));
 			var cats = objectRows(stats.cats).map(function (row) { return [ catLabel(row[0]), row[1], row[0] ]; });
 			if (cats.length) body.appendChild(section(_('Categories'), barList(cats)));
 			body.appendChild(E('div', { 'class': 'kixdns-stats-cols' }, [

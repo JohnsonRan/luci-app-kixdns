@@ -167,16 +167,23 @@ func updateFiltered(p paths, hours []string, enabled bool, command string, q que
 		if err != nil {
 			return empty, err
 		}
-		result.Totals = &totalReference{}
+		var cacheHits int64
+		result.Totals = &totalReference{CacheHits: &cacheHits}
 		for k, n := range c.values {
 			switch k.kind {
 			case "q":
 				result.Totals.Queries += n
+				if n > 0 && meta(tx, "legacy_log:"+k.hour) != "" {
+					result.LegacyLogs = true
+				}
 			case "cache":
-				result.Totals.CacheHits += n
+				cacheHits += n
 			case "err":
 				result.Totals.Errors += n
 			}
+		}
+		if result.LegacyLogs {
+			result.Totals.CacheHits = nil
 		}
 	}
 	if err = store.finish(); err != nil {

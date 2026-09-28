@@ -11,9 +11,21 @@ The Shell wrapper only supplies the existing bounded TypeSafe HTTP transport.
   Statistics and classification cache use separate buckets, not separate stores.
 - Hourly client/domain/upstream/pipeline/type/response associations, global totals
   and the log cursor commit in one transaction. No individual request history.
-- All primary cards, chart and rankings use retained matching associations.
-  The separate 24h total is complete and unfiltered. Missing associations are
+- All primary cards, chart and rankings use retained matching log associations.
+  The separate 24h logged-response total is unfiltered and retains evicted
+  associations' counts; it does not include requests absent from the source log.
+  Coverage shows retained details before filters. Missing associations are
   marked, never treated as confirmed zeroes.
+- Only explicit `cache_hit=true/false` is trusted. `cache_hits: null` means the
+  selected hours contain legacy/unknown hit semantics, not zero hits.
+  `legacy_logs` is always emitted and describes the whole window; an unaffected
+  filtered hour can still have a numeric hit count. Quality is conservative per
+  hour: mixing old and new records makes that entire hour's rate unavailable.
+- Database schema 2 upgrades transactionally to schema 3 without discarding
+  counts, categories or the log cursor. Existing hours are marked untrusted;
+  normal expiry removes that marker. Lost logs or evicted details are not rebuilt.
+  Older helpers reject schema 3: keep a pre-upgrade database backup if rollback
+  is needed, and do not delete the database to hide this warning.
 - A soft **8 MiB live key/value budget** evicts oldest associated hours while
   preserving full totals. This is **not** an 8 MiB RAM or file-size guarantee.
   COW pages, mmap, free pages, logs and classification cache need extra space.

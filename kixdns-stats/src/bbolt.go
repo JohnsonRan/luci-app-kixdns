@@ -115,7 +115,7 @@ func validateDB(tx *bolt.Tx) error {
 			return errors.New("unrecognized statistics database")
 		}
 	}
-	if meta(tx, "version") != "2" {
+	if version := meta(tx, "version"); version != "2" && version != "3" {
 		return errors.New("unsupported statistics database version")
 	}
 	return nil
@@ -192,6 +192,22 @@ func initializeStore(tx *bolt.Tx) (*boltStore, error) {
 			return nil, errors.New("invalid joint byte count")
 		}
 		s.jointBytes = n
+		if meta(tx, "version") == "2" {
+			// Old aggregates confuse cache insertion with a hit. Keep the data,
+			// but never expose those hit counts as a trustworthy percentage.
+			if err := tx.Bucket([]byte("totals")).ForEach(func(k, v []byte) error {
+				counts, err := unpack(v)
+				if err != nil || counts[0] == 0 {
+					return err
+				}
+				return s.setMeta("legacy_log:"+string(k), "1")
+			}); err != nil {
+				return nil, err
+			}
+			if err := s.setMeta("version", "3"); err != nil {
+				return nil, err
+			}
+		}
 		return s, nil
 	}
 	if k, _ := tx.Cursor().First(); k != nil {
@@ -207,7 +223,7 @@ func initializeStore(tx *bolt.Tx) (*boltStore, error) {
 	if _, err := rand.Read(id); err != nil {
 		return nil, err
 	}
-	for k, v := range map[string]string{"version": "2", "id": hex.EncodeToString(id), "revision": "0", "joint_bytes": "0"} {
+	for k, v := range map[string]string{"version": "3", "id": hex.EncodeToString(id), "revision": "0", "joint_bytes": "0"} {
 		if err := s.setMeta(k, v); err != nil {
 			return nil, err
 		}
@@ -293,6 +309,19 @@ func (s *boltStore) pruneExpired(hours []string) error {
 			k, v = c.Seek(key)
 		}
 	}
+	c := s.tx.Bucket([]byte("meta")).Cursor()
+	prefix := []byte("legacy_log:")
+	for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); {
+		if keep[string(k[len(prefix):])] {
+			k, v = c.Next()
+			continue
+		}
+		key := bytes.Clone(k)
+		if err := s.deleteKey("meta", key, v); err != nil {
+			return err
+		}
+		k, v = c.Seek(key)
+	}
 	return nil
 }
 func (s *boltStore) pruneCapacity(limit int64) error {
@@ -322,6 +351,11 @@ func (s *boltStore) pruneCapacity(limit int64) error {
 	return nil
 }
 func (s *boltStore) recordJoint(h, domain string, f map[string]string) error {
+	if f["cache_hit"] != "true" && f["cache_hit"] != "false" {
+		if err := s.setMeta("legacy_log:"+h, "1"); err != nil {
+			return err
+		}
+	}
 	fields := [6]string{f["client_ip"], domain, f["upstream"], f["pipeline"], f["qtype"], f["rcode"]}
 	for _, v := range fields {
 		if len(v) > 4096 {
@@ -342,7 +376,7 @@ func (s *boltStore) recordJoint(h, domain string, f map[string]string) error {
 		return err
 	}
 	n[0]++
-	if f["cache"] == "true" {
+	if f["cache_hit"] == "true" {
 		n[1]++
 	}
 	if f["rcode"] != "" && f["rcode"] != "NoError" {
@@ -398,6 +432,7 @@ func filteredSnapshot(tx *bolt.Tx, hours []string, classes map[string]classifica
 	}
 	c := newCounters(hours)
 	categories := make(map[string]string)
+	cacheKnown := true
 	err = tx.Bucket([]byte("hourly")).ForEach(func(k, v []byte) error {
 		h, f, e := jointFields(k)
 		if e != nil {
@@ -430,6 +465,9 @@ func filteredSnapshot(tx *bolt.Tx, hours []string, classes map[string]classifica
 				return nil
 			}
 		}
+		if n[0] > 0 && meta(tx, "legacy_log:"+h) != "" {
+			cacheKnown = false
+		}
 		for i, kind := range []string{"q", "cache", "err"} {
 			c.values[metric{kind, h, "-"}] += n[i]
 		}
@@ -444,6 +482,9 @@ func filteredSnapshot(tx *bolt.Tx, hours []string, classes map[string]classifica
 		return empty, err
 	}
 	result := c.render(hours, classes, cached, hosts, enabled)
+	if !cacheKnown {
+		result.CacheHits = nil
+	}
 	result.Filters = &q
 	result.Classify.Pending = 0
 	for _, cat := range categories {

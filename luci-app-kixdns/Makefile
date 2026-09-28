@@ -5,7 +5,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-kixdns
 PKG_VERSION:=1.6.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 LUCI_TITLE:=LuCI Support for KixDNS
 LUCI_DESCRIPTION:=LuCI interface for KixDNS - a high-performance DNS forwarding server

@@ -49,14 +49,14 @@ type classificationStatus struct {
 	Pending int  `json:"pending"`
 }
 type totalReference struct {
-	Queries   int64 `json:"queries"`
-	CacheHits int64 `json:"cache_hits"`
-	Errors    int64 `json:"errors"`
+	Queries   int64  `json:"queries"`
+	CacheHits *int64 `json:"cache_hits"`
+	Errors    int64  `json:"errors"`
 }
 type snapshot struct {
 	Until       string               `json:"until"`
 	Queries     int64                `json:"queries"`
-	CacheHits   int64                `json:"cache_hits"`
+	CacheHits   *int64               `json:"cache_hits"`
 	Errors      int64                `json:"errors"`
 	Unique      int                  `json:"unique"`
 	Hours       []hour               `json:"hours"`
@@ -72,6 +72,7 @@ type snapshot struct {
 	Coverage    *coverageInfo        `json:"coverage,omitempty"`
 	Totals      *totalReference      `json:"totals,omitempty"`
 	Partial     bool                 `json:"partial,omitempty"`
+	LegacyLogs  bool                 `json:"legacy_logs"`
 }
 
 var (
@@ -226,7 +227,7 @@ func (c *counters) advance(log *os.File, cur cursor, visit func(string, string, 
 			return nil
 		}
 		c.bump("q", h, "-", 1)
-		if f["cache"] == "true" {
+		if f["cache_hit"] == "true" {
 			c.bump("cache", h, "-", 1)
 		}
 		if rc := f["rcode"]; rc != "" && rc != "NoError" {
@@ -311,7 +312,8 @@ func ranked(values map[string]int64) [][]any {
 }
 
 func (c *counters) render(hours []string, classes map[string]classification, cached int, hosts map[string]string, enabled bool) snapshot {
-	s := snapshot{Until: hours[len(hours)-1], Cats: make(map[string]int64), Classify: classificationStatus{Enabled: enabled, Cached: cached}}
+	var cacheHits int64
+	s := snapshot{Until: hours[len(hours)-1], CacheHits: &cacheHits, Cats: make(map[string]int64), Classify: classificationStatus{Enabled: enabled, Cached: cached}}
 	totals := make(map[string]map[string]int64)
 	qh := make(map[string]int64)
 	for k, n := range c.values {
@@ -320,7 +322,7 @@ func (c *counters) render(hours []string, classes map[string]classification, cac
 			s.Queries += n
 			qh[k.hour] += n
 		case "cache":
-			s.CacheHits += n
+			cacheHits += n
 		case "err":
 			s.Errors += n
 		default:

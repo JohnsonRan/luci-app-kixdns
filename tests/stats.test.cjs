@@ -48,7 +48,7 @@ process.stdout.write(mode === '401' ? mode : '200');
 
 const epoch = Math.floor(Date.now() / 3600000) * 3600 + 1800;
 const hour = new Date(epoch * 1000).toISOString().slice(0, 13);
-const line = (q, extra = '') => `${hour}:16:38Z forwarded event="dns_response" qname=${q} qtype=A rcode=NoError ${extra}\n`;
+const line = (q, extra = '') => `${hour}:16:38Z forwarded event="dns_response" qname=${q} qtype=A rcode=NoError cache_hit=false ${extra}\n`;
 let sequence = 0;
 function fixture() {
 	const dir = path.join(temp, String(++sequence));
@@ -122,7 +122,7 @@ try {
 
 	const f = fixture();
 	fs.writeFileSync(path.join(f.dir, 'leases'), '0 aa:bb:cc:dd:ee:ff 192.168.1.110 iPhone *\n');
-	f.append(line('API.MSN.COM.', 'cache=true client_ip=192.168.1.110 pipeline=global_doh upstream=doh:dns.google'));
+	f.append(line('API.MSN.COM.', 'cache_hit=true client_ip=192.168.1.110 pipeline=global_doh upstream=doh:dns.google'));
 	f.append(line('api.msn.com').replace('qtype=A', 'qtype=AAAA'));
 	f.append(line('bad.example').replace('rcode=NoError', 'rcode=ServFail'));
 	f.append(`${hour}:00:00Z message="event=\\"dns_response\\" qname=fake.example" event="matcher_log"\n`);

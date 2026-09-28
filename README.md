@@ -28,18 +28,25 @@ Open **Services → KixDNS** in LuCI. For other targets, see [Build from source]
 - Pipeline editor with local-first configuration, backups and optional manual
   remote updates; optional GeoIP download before startup.
 - Searchable log viewer and 24-hour statistics by client, domain and category.
-  One filter applies to cards, chart and rankings. Separate **24h total** is
-  unaffected by filters; incomplete hours are marked rather than shown as zero.
+  One filter applies to cards, chart and rankings of **retained log records**.
+  The separate **24h logged responses** reference is unaffected by filters;
+  retained-detail coverage is shown before filters, and missing hours are marked.
 - Optional TypeSafe Jev classification. Add an API key in LuCI to enable it.
   Eligible queried domains are sent to TypeSafe; leave key blank for no requests.
   Local names such as `router`, `.lan`, `.local` and `.arpa` are excluded, but
   exclusion is not a guarantee that every other name is public. Categories are
   hints, not security verdicts.
 
-Statistics come from KixDNS `dns_response` logs. Keep recommended query-log
-filter enabled: queries absent from log cannot be counted. Stats retain 24 hours;
-when association storage fills, oldest client/domain associations are dropped
-while full query totals remain available. See [statistics details](kixdns-stats/README.md).
+Statistics come from KixDNS `dns_response` logs, not a complete DNS traffic counter.
+Queries absent from the log cannot be counted. Stats retain 24 hours; when storage
+fills, oldest client/domain associations are dropped while unfiltered logged
+response totals remain. Cache hit rates require explicit `cache_hit` fields:
+legacy `cache=true` can mean a cacheable upstream answer, not a hit. Old logs and
+old database hours therefore show an unavailable rate, never a fabricated 0% or
+100%. The response-logging fix is proposed in [upstream PR #65](https://github.com/olicesx/kixdns/pull/65);
+the packaged core revision is not changed by this statistics fix. Until a fixed
+core is adopted, newly collected legacy logs continue to have unavailable rates.
+See [statistics details](kixdns-stats/README.md).
 
 ## Data and upgrades
 

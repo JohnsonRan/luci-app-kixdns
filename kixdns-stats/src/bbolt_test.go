@@ -51,7 +51,7 @@ func jointFixture(t *testing.T) (paths, []string) {
 	return p, hours
 }
 func jointLine(h, domain, client, qtype, rcode string, hit bool, up, pipe string) string {
-	return fmt.Sprintf("%s:01:02 event=dns_response qname=%s client_ip=%s qtype=%s rcode=%s cache=%t upstream=%s pipeline=%s\n", h, domain, client, qtype, rcode, hit, up, pipe)
+	return fmt.Sprintf("%s:01:02 event=dns_response qname=%s client_ip=%s qtype=%s rcode=%s cache_hit=%t upstream=%s pipeline=%s\n", h, domain, client, qtype, rcode, hit, up, pipe)
 }
 func jointCall(t *testing.T, p paths, hours []string, cmd string, q queryFilter) snapshot {
 	t.Helper()
@@ -95,7 +95,7 @@ func TestLinkedStatistics(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := jointCall(t, p, hours, "snapshot", tc.q)
-			if s.Queries != tc.total || s.CacheHits != tc.hits || s.Errors != tc.errs || s.Unique != tc.unique {
+			if s.Queries != tc.total || s.CacheHits == nil || *s.CacheHits != tc.hits || s.Errors != tc.errs || s.Unique != tc.unique {
 				t.Fatalf("wrong summary: %+v", s)
 			}
 			if s.Hours[22].Queries != tc.previous || s.Hours[23].Queries != tc.current || s.Partial || s.Totals.Queries != 7 {
@@ -341,7 +341,7 @@ func TestIncrementalCheckpoint(t *testing.T) {
 	if s.Queries != 6 || s.Totals.Queries != 8 || s.Coverage.Hours[22].Capacity != 2 || s.Classify.Cached != 4 {
 		t.Fatal("deletions/gaps/cursor lost on restore", s)
 	}
-	if s = jointCall(t, p, hours, "snapshot", queryFilter{Category: "ok"}); s.Queries != 4 || s.CacheHits != 4 {
+	if s = jointCall(t, p, hours, "snapshot", queryFilter{Category: "ok"}); s.Queries != 4 || s.CacheHits == nil || *s.CacheHits != 4 {
 		t.Fatal("changed existing aggregate lost", s)
 	}
 }

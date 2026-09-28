@@ -418,22 +418,22 @@ msgstr ""
 msgid "Clear filters"
 msgstr ""
 
-msgid "Retained queries"
+msgid "Retained responses"
 msgstr ""
 
 msgid "Incomplete associations; this is not a complete hourly count."
 msgstr ""
 
-msgid "Filter results"
+msgid "Retained log records"
 msgstr ""
 
-msgid "24h total: %s"
+msgid "24h logged responses (unfiltered): %s"
 msgstr ""
 
 msgid "Unaffected by filters"
 msgstr ""
 
-msgid "Some hours are incomplete"
+msgid "Some response details are missing"
 msgstr ""
 
 msgid "Some associations are unavailable."
@@ -443,4 +443,16 @@ msgid "Oldest associations removed at the storage limit."
 msgstr ""
 
 msgid "Some records could not be associated."
+msgstr ""
+
+msgid "Retained responses (24h)"
+msgstr ""
+
+msgid "Unavailable"
+msgstr ""
+
+msgid "Retained details (before filters): %s"
+msgstr ""
+
+msgid "Legacy logs may omit responses. Hit rates for affected hours are unavailable; upgrade the DNS core. Missing history cannot be recovered."
 msgstr ""
