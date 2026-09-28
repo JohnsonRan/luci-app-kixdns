@@ -4,7 +4,13 @@ LC_ALL=C
 export LC_ALL
 
 state=/tmp/kixdns-resource.state
-version="$(/usr/bin/kixdns --version 2>/dev/null | awk 'NR == 1 { print $NF; exit }' | tr -cd 'A-Za-z0-9._+-')"
+# Package version (apk: P:/V:, opkg: Package:/Version:); upstream --version is often stale.
+pkgdb=/lib/apk/db/installed
+[ -r "$pkgdb" ] || pkgdb=/usr/lib/opkg/status
+version="$(awk '/^(P:|Package: )/ { p = ($0 == "P:kixdns" || $0 == "Package: kixdns") }
+	p && sub(/^(V:|Version: )/, "") { print; exit }' "$pkgdb" 2>/dev/null)"
+[ -n "$version" ] || version="$(/usr/bin/kixdns --version 2>/dev/null | awk 'NR == 1 { print $NF; exit }')"
+version="$(printf '%s' "$version" | tr -cd 'A-Za-z0-9._+~-')"
 pid="$(pidof kixdns 2>/dev/null | awk '{ print $1 }')"
 
 if [ -z "$pid" ] || [ ! -r "/proc/$pid/stat" ]; then
