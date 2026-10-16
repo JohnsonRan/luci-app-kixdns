@@ -309,6 +309,7 @@ try {
 	assert.equal(acl.read.file['/usr/libexec/kixdns-stats'], undefined);
 	assert.equal(acl.read.file['/tmp/kixdns-stats/*'], undefined);
 	assert.deepEqual(acl.write.file['/usr/libexec/kixdns-stats clear'], ['exec']);
+	assert.equal(acl.write.file['/tmp/kixdns.log'], undefined);
 	const init = fs.readFileSync(path.join(root, 'luci-app-kixdns/root/etc/init.d/kixdns'), 'utf8');
 	assert.match(init, /kixdns-stats fold/);
 	assert.match(init, /kixdns-stats clear/);

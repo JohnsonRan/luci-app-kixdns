@@ -20,7 +20,6 @@
 		"write": {
 			"file": {
 				"/etc/kixdns/*": [ "write" ],
-				"/tmp/kixdns.log": [ "write" ],
 				"/usr/libexec/kixdns-stats classify": [ "exec" ],
 				"/usr/libexec/kixdns-stats clear": [ "exec" ],
 				"/etc/init.d/kixdns": [ "exec" ]
