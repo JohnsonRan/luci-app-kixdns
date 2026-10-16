@@ -52,6 +52,10 @@ jobs:
           fi
 
           latest_version="${latest_tag#v}"
+          if ! [[ "$latest_version" =~ ^[0-9][A-Za-z0-9._+-]*$ ]]; then
+            echo "Unexpected upstream tag: $latest_tag" >&2
+            exit 1
+          fi
           latest_source_version="$(git -C upstream-kixdns rev-parse HEAD)"
           latest_short_version="$(git -C upstream-kixdns rev-parse --short=7 HEAD)"
           commit_timestamp="$(git -C upstream-kixdns log -n 1 --format=%ct)"
@@ -96,16 +100,22 @@ jobs:
       - name: Update package Makefile
         if: steps.info.outputs.current_version != steps.info.outputs.latest_version || steps.info.outputs.current_source_version != steps.info.outputs.latest_source_version
         shell: bash
+        env:
+          PKG_VERSION: ${{ steps.info.outputs.latest_version }}
+          PKG_RELEASE: ${{ steps.info.outputs.latest_release }}
+          PKG_SOURCE_DATE: ${{ steps.info.outputs.source_date }}
+          PKG_SOURCE_VERSION: ${{ steps.info.outputs.latest_source_version }}
+          PKG_MIRROR_HASH: ${{ steps.info.outputs.mirror_hash }}
         run: |
           set -euo pipefail
 
           makefile="luci-app-kixdns/kixdns/Makefile"
           sed -i \
-            -e "s/^PKG_VERSION:=.*/PKG_VERSION:=${{ steps.info.outputs.latest_version }}/" \
-            -e "s/^PKG_RELEASE:=.*/PKG_RELEASE:=${{ steps.info.outputs.latest_release }}/" \
-            -e "s/^PKG_SOURCE_DATE:=.*/PKG_SOURCE_DATE:=${{ steps.info.outputs.source_date }}/" \
-            -e "s/^PKG_SOURCE_VERSION:=.*/PKG_SOURCE_VERSION:=${{ steps.info.outputs.latest_source_version }}/" \
-            -e "s/^PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=${{ steps.info.outputs.mirror_hash }}/" \
+            -e "s/^PKG_VERSION:=.*/PKG_VERSION:=${PKG_VERSION}/" \
+            -e "s/^PKG_RELEASE:=.*/PKG_RELEASE:=${PKG_RELEASE}/" \
+            -e "s/^PKG_SOURCE_DATE:=.*/PKG_SOURCE_DATE:=${PKG_SOURCE_DATE}/" \
+            -e "s/^PKG_SOURCE_VERSION:=.*/PKG_SOURCE_VERSION:=${PKG_SOURCE_VERSION}/" \
+            -e "s/^PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=${PKG_MIRROR_HASH}/" \
             "$makefile"
 
       - id: pr-metadata
