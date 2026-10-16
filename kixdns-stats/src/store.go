@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -26,13 +25,6 @@ func privateDir(dir string) error {
 	}
 	return os.Chmod(dir, 0700)
 }
-func optionalFile(name string) ([]byte, error) {
-	b, err := os.ReadFile(name)
-	if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) {
-		return nil, nil
-	}
-	return b, err
-}
 func syncPath(name string) error {
 	f, err := os.Open(name)
 	if err != nil {
@@ -41,48 +33,6 @@ func syncPath(name string) error {
 	defer f.Close()
 	return f.Sync()
 }
-func atomicFile(name string, data []byte, durable bool) error {
-	current, err := os.ReadFile(name)
-	if err == nil && bytes.Equal(current, data) {
-		if durable {
-			if err := syncPath(name); err != nil {
-				return err
-			}
-			return syncPath(filepath.Dir(name))
-		}
-		return nil
-	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	f, err := os.CreateTemp(filepath.Dir(name), "."+filepath.Base(name)+"-")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	defer os.Remove(tmp)
-	if _, err = f.Write(data); err != nil {
-		f.Close()
-		return err
-	}
-	if durable {
-		if err = f.Sync(); err != nil {
-			f.Close()
-			return err
-		}
-	}
-	if err = f.Close(); err != nil {
-		return err
-	}
-	if err = os.Rename(tmp, name); err != nil {
-		return err
-	}
-	if durable {
-		return syncPath(filepath.Dir(name))
-	}
-	return nil
-}
-
 // Closing this descriptor releases the lock; HTTP transport never owns it.
 func lockState(p paths) (*os.File, error) {
 	if err := privateDir(p.state); err != nil {
