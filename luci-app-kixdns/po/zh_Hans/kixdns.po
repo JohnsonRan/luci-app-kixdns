@@ -185,57 +185,14 @@ msgstr "调试日志"
 msgid "Pass --debug to the daemon."
 msgstr "向守护进程传递 --debug 参数。"
 
-msgid "KixDNS - Config Editor"
-msgstr "KixDNS - 配置编辑器"
-
-msgid ""
-"Edit the pipeline configuration (%s). The content must be valid JSON; it is "
-"validated before saving. KixDNS also supports hot-reloading the config file."
-msgstr ""
-"编辑 pipeline 配置文件（%s）。内容必须是合法的 JSON，保存前会进行校验。"
-"KixDNS 也支持配置文件热重载。"
-
-msgid "line"
-msgstr "行"
-
-msgid "column"
-msgstr "列"
-
-msgid "JSON is valid."
-msgstr "JSON 校验通过。"
-
-msgid "JSON is valid, formatted."
-msgstr "JSON 校验通过，已格式化。"
-
 msgid "Invalid JSON"
 msgstr "JSON 格式错误"
-
-msgid "Not saved — invalid JSON"
-msgstr "未保存 — JSON 格式错误"
-
-msgid "Saved."
-msgstr "已保存。"
-
-msgid "Saved and service restarted."
-msgstr "已保存并重启服务。"
 
 msgid "Configuration saved and KixDNS restarted."
 msgstr "配置已保存，KixDNS 已重启。"
 
 msgid "Save failed"
 msgstr "保存失败"
-
-msgid "Validate"
-msgstr "校验"
-
-msgid "Format"
-msgstr "格式化"
-
-msgid "Save"
-msgstr "保存"
-
-msgid "Save & Apply"
-msgstr "保存并应用"
 
 msgid "KixDNS - Log"
 msgstr "KixDNS - 日志"
@@ -291,12 +248,6 @@ msgstr "统计"
 msgid "KixDNS - Stats"
 msgstr "KixDNS - 统计"
 
-msgid "Query totals from dns_response logs for the current and previous 23 hours. Checkpointed every five minutes and on service stop. With a TypeSafe API key, eligible domain names are sent to TypeSafe for classification."
-msgstr "统计当前及此前 23 个小时的 dns_response 日志，每五分钟及服务停止时保存。配置 TypeSafe API 密钥后，符合条件的域名会发送至 TypeSafe 进行分类。"
-
-msgid "Queries"
-msgstr "查询"
-
 msgid "Cache hit rate"
 msgstr "缓存命中率"
 
@@ -305,9 +256,6 @@ msgstr "错误"
 
 msgid "Unique domains"
 msgstr "唯一域名"
-
-msgid "Queries (24h)"
-msgstr "查询（24 小时）"
 
 msgid "Categories"
 msgstr "分类"
@@ -341,9 +289,6 @@ msgstr "统计请求失败"
 
 msgid "Failed to save statistics; log was not cleared."
 msgstr "统计保存失败，日志未清除。"
-
-msgid "Breakdowns are limited to 100 unique values per hour; totals remain complete."
-msgstr "各明细每小时最多记录 100 个不同值；查询总数仍完整保留。"
 
 msgid "Classify pending (%d)"
 msgstr "分类未处理（%d）"

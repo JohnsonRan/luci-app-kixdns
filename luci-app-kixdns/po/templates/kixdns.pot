@@ -173,54 +173,13 @@ msgstr ""
 msgid "Pass --debug to the daemon."
 msgstr ""
 
-msgid "KixDNS - Config Editor"
-msgstr ""
-
-msgid ""
-"Edit the pipeline configuration (%s). The content must be valid JSON; it is "
-"validated before saving. KixDNS also supports hot-reloading the config file."
-msgstr ""
-
-msgid "line"
-msgstr ""
-
-msgid "column"
-msgstr ""
-
-msgid "JSON is valid."
-msgstr ""
-
-msgid "JSON is valid, formatted."
-msgstr ""
-
 msgid "Invalid JSON"
-msgstr ""
-
-msgid "Not saved — invalid JSON"
-msgstr ""
-
-msgid "Saved."
-msgstr ""
-
-msgid "Saved and service restarted."
 msgstr ""
 
 msgid "Configuration saved and KixDNS restarted."
 msgstr ""
 
 msgid "Save failed"
-msgstr ""
-
-msgid "Validate"
-msgstr ""
-
-msgid "Format"
-msgstr ""
-
-msgid "Save"
-msgstr ""
-
-msgid "Save & Apply"
 msgstr ""
 
 msgid "KixDNS - Log"
@@ -277,12 +236,6 @@ msgstr ""
 msgid "KixDNS - Stats"
 msgstr ""
 
-msgid "Query totals from dns_response logs for the current and previous 23 hours. Checkpointed every five minutes and on service stop. With a TypeSafe API key, eligible domain names are sent to TypeSafe for classification."
-msgstr ""
-
-msgid "Queries"
-msgstr ""
-
 msgid "Cache hit rate"
 msgstr ""
 
@@ -290,9 +243,6 @@ msgid "Errors"
 msgstr ""
 
 msgid "Unique domains"
-msgstr ""
-
-msgid "Queries (24h)"
 msgstr ""
 
 msgid "Categories"
@@ -326,9 +276,6 @@ msgid "Statistics request failed"
 msgstr ""
 
 msgid "Failed to save statistics; log was not cleared."
-msgstr ""
-
-msgid "Breakdowns are limited to 100 unique values per hour; totals remain complete."
 msgstr ""
 
 msgid "Classify pending (%d)"
