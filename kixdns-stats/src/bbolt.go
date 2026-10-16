@@ -493,7 +493,7 @@ func filteredSnapshot(tx *bolt.Tx, hours []string, classes map[string]classifica
 		}
 	}
 	result.Coverage = &coverageInfo{LimitBytes: jointBudget}
-	for i, h := range hours {
+	for i, h := range distinctHours(hours) {
 		v := by[h]
 		v.Time = h
 		result.Coverage.Hours = append(result.Coverage.Hours, v)

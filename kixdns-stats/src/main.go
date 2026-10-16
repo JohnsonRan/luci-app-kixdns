@@ -120,6 +120,18 @@ func hourKeys(now int64) ([]string, error) {
 	return keys, nil
 }
 
+func distinctHours(hours []string) []string {
+	seen := make(map[string]bool, len(hours))
+	distinct := make([]string, 0, len(hours))
+	for _, h := range hours {
+		if !seen[h] {
+			seen[h] = true
+			distinct = append(distinct, h)
+		}
+	}
+	return distinct
+}
+
 func newCounters(hours []string) *counters {
 	c := &counters{make(map[metric]int64), make(map[string]bool)}
 	for _, h := range hours {
@@ -337,7 +349,7 @@ func (c *counters) render(hours []string, classes map[string]classification, cac
 			totals[kind] = make(map[string]int64)
 		}
 	}
-	for _, h := range hours {
+	for _, h := range distinctHours(hours) {
 		s.Hours = append(s.Hours, hour{Time: h, Queries: qh[h]})
 	}
 	s.Unique = len(totals["qname"])
