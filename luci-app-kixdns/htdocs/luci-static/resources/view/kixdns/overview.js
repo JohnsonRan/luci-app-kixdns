@@ -299,6 +299,14 @@ return view.extend({
 		o.password = true;
 		o.rmempty = true;
 
+		o = s.option(form.Value, 'typesafe_api_url', _('TypeSafe API endpoint'),
+			_('Optional. Custom Jev-compatible endpoint; the API key is sent to it. Leave empty to use the official TypeSafe endpoint.'));
+		o.placeholder = 'https://api.typesafe.ai/v1/systemone';
+		o.rmempty = true;
+		o.validate = function (section_id, value) {
+			return !value || /^https?:\/\/[!-~]+$/.test(value) || _('Expecting an http:// or https:// URL');
+		};
+
 		return m.render();
 	}
 });

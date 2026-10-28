@@ -269,6 +269,14 @@ try {
 	c.response({ answers: { cat: { choice: 'ok', confidence: 1e-7 } }, decoy: { choice: 'malware' } });
 	assert.equal(c.exec('classify SKIP.EXAMPLE.').conf, 1e-7);
 	assert.equal(c.exec('check').qname, 'example.com');
+	c.env.KIXDNS_TYPESAFE_URL = 'http://jev.lan:8080/v1';
+	c.exec('check');
+	assert.equal(JSON.parse(fs.readFileSync(path.join(c.state, 'curl-args.json'), 'utf8')).at(-1), 'http://jev.lan:8080/v1', 'custom endpoint');
+	for (const url of ['-K/etc/passwd', 'ftp://jev.lan', 'https://', 'https://jev.lan/a b']) {
+		c.env.KIXDNS_TYPESAFE_URL = url;
+		assert.equal(c.exec('check').error, 'http_bad_url', url);
+	}
+	c.env.KIXDNS_TYPESAFE_URL = 'https://invalid.test/mocked';
 	console.log('PASS: domain validation, Go JSON validation, batch mapping, bad responses, unified cache, key handling');
 
 	const inheritance = fixture();

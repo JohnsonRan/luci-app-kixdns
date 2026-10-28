@@ -353,6 +353,15 @@ msgstr "TypeSafe API 密钥"
 msgid "Optional. Enables automatic TypeSafe Jev classification. Eligible domain names are sent to TypeSafe; leave empty to disable."
 msgstr "可选。启用 TypeSafe Jev 自动分类，符合条件的域名会发送至 TypeSafe；留空则禁用。"
 
+msgid "TypeSafe API endpoint"
+msgstr "TypeSafe API 终结点"
+
+msgid "Optional. Custom Jev-compatible endpoint; the API key is sent to it. Leave empty to use the official TypeSafe endpoint."
+msgstr "可选。自定义兼容 Jev 的终结点，API 密钥会发送至该终结点。留空则使用 TypeSafe 官方终结点。"
+
+msgid "Expecting an http:// or https:// URL"
+msgstr "请输入以 http:// 或 https:// 开头的 URL"
+
 msgid "Client"
 msgstr "客户端"
 

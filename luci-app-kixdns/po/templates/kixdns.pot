@@ -341,6 +341,15 @@ msgstr ""
 msgid "Optional. Enables automatic TypeSafe Jev classification. Eligible domain names are sent to TypeSafe; leave empty to disable."
 msgstr ""
 
+msgid "TypeSafe API endpoint"
+msgstr ""
+
+msgid "Optional. Custom Jev-compatible endpoint; the API key is sent to it. Leave empty to use the official TypeSafe endpoint."
+msgstr ""
+
+msgid "Expecting an http:// or https:// URL"
+msgstr ""
+
 msgid "Client"
 msgstr ""
 

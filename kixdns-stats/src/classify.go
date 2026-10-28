@@ -285,7 +285,7 @@ func classify(p paths, hours []string, transport, domain string, probe bool) (ma
 		return classifyError("no_key"), nil
 	}
 	if code != "200" {
-		if code != "bad_key" && (len(code) != 3 || strings.ContainsFunc(code, func(r rune) bool { return r < '0' || r > '9' })) {
+		if code != "bad_key" && code != "bad_url" && (len(code) != 3 || strings.ContainsFunc(code, func(r rune) bool { return r < '0' || r > '9' })) {
 			code = "000"
 		}
 		return classifyError("http_" + code), nil
