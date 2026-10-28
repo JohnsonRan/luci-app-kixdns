@@ -61,7 +61,7 @@ function fixture() {
 			(process.platform === 'win32' ? '/c/Program Files/Git/usr/bin:' : '') + (process.env.PATH || ''),
 		KIXDNS_STATS_CORE: core, KIXDNS_NOW: String(epoch),
 		KIXDNS_LOG: unix(log), KIXDNS_STATEDIR: unix(state), KIXDNS_PERSISTDIR: unix(path.join(dir, 'persist')),
-		KIXDNS_TYPESAFE_KEY: '', KIXDNS_TYPESAFE_URL: 'https://invalid.test/mocked', KIXDNS_CLASSIFY_BATCH: '16',
+		KIXDNS_TYPESAFE_KEY: '', KIXDNS_TYPESAFE_URL: 'https://invalid.test/mocked', KIXDNS_TYPESAFE_MODEL: '', KIXDNS_CLASSIFY_BATCH: '16',
 		KIXDNS_DHCP_LEASES: unix(path.join(dir, 'leases')), KIXDNS_HOSTS: unix(path.join(dir, 'hosts')),
 		KIXDNS_ODHCPD: unix(path.join(dir, 'odhcp')), TEST_STATE: state, TEST_HTTP: '200', TEST_EPOCH: String(epoch)
 	};
@@ -277,6 +277,14 @@ try {
 		assert.equal(c.exec('check').error, 'http_bad_url', url);
 	}
 	c.env.KIXDNS_TYPESAFE_URL = 'https://invalid.test/mocked';
+	c.env.KIXDNS_TYPESAFE_MODEL = 'my-jev:v2';
+	c.exec('check');
+	assert.equal(JSON.parse(fs.readFileSync(path.join(c.state, 'request.json'), 'utf8')).model, 'my-jev:v2', 'custom model');
+	for (const model of ['a b', 'x'.repeat(257)]) {
+		c.env.KIXDNS_TYPESAFE_MODEL = model;
+		assert.equal(c.exec('check').error, 'bad_model', model);
+	}
+	c.env.KIXDNS_TYPESAFE_MODEL = '';
 	console.log('PASS: domain validation, Go JSON validation, batch mapping, bad responses, unified cache, key handling');
 
 	const inheritance = fixture();

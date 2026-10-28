@@ -307,6 +307,15 @@ return view.extend({
 			return !value || /^https?:\/\/[!-~]+$/.test(value) || _('Expecting an http:// or https:// URL');
 		};
 
+		o = s.option(form.Value, 'typesafe_model', _('Model name'),
+			_('Optional. Model requested from the custom endpoint. Leave empty to use jev-latest.'));
+		o.placeholder = 'jev-latest';
+		o.rmempty = true;
+		o.depends('typesafe_api_url', /.+/);
+		o.validate = function (section_id, value) {
+			return !value || /^[!-~]{1,256}$/.test(value) || _('Expecting up to 256 printable ASCII characters without spaces');
+		};
+
 		return m.render();
 	}
 });

@@ -350,6 +350,15 @@ msgstr ""
 msgid "Expecting an http:// or https:// URL"
 msgstr ""
 
+msgid "Model name"
+msgstr ""
+
+msgid "Optional. Model requested from the custom endpoint. Leave empty to use jev-latest."
+msgstr ""
+
+msgid "Expecting up to 256 printable ASCII characters without spaces"
+msgstr ""
+
 msgid "Client"
 msgstr ""
 

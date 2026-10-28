@@ -186,6 +186,20 @@ func classificationEnabled() bool {
 	key, _ := exec.Command("uci", "-q", "get", "kixdns.main.typesafe_api_key").Output()
 	return len(bytes.TrimSpace(key)) != 0
 }
+func classifyModel() string {
+	model := os.Getenv("KIXDNS_TYPESAFE_MODEL")
+	if model == "" {
+		out, _ := exec.Command("uci", "-q", "get", "kixdns.main.typesafe_model").Output()
+		model = string(bytes.TrimSpace(out))
+	}
+	if model == "" {
+		return "jev-latest"
+	}
+	return model
+}
+func validModel(model string) bool {
+	return len(model) <= 256 && !strings.ContainsFunc(model, func(r rune) bool { return r < '!' || r > '~' })
+}
 func classifyError(reason string) map[string]any {
 	return map[string]any{"error": reason, "did": 0, "pending": 0}
 }
@@ -206,6 +220,10 @@ func classify(p paths, hours []string, transport, domain string, probe bool) (ma
 	}
 	if !classificationEnabled() {
 		return classifyError("no_key"), nil
+	}
+	model := classifyModel()
+	if !validModel(model) {
+		return classifyError("bad_model"), nil
 	}
 	if probe {
 		domain = "example.com"
@@ -251,7 +269,7 @@ func classify(p paths, hours []string, transport, domain string, probe bool) (ma
 		}
 		questions[key] = map[string]any{"type": "choice", "instructions": instruction, "criteria": criteria}
 	}
-	data, err := json.Marshal(map[string]any{"state": state, "model": "jev-latest", "questions": questions})
+	data, err := json.Marshal(map[string]any{"state": state, "model": model, "questions": questions})
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +342,7 @@ func classify(p paths, hours []string, transport, domain string, probe bool) (ma
 		if _, ok := criteria[answer.Choice]; !ok {
 			continue
 		}
-		c := cachedClass{answer.Choice, *answer.Confidence, "jev-latest"}
+		c := cachedClass{answer.Choice, *answer.Confidence, model}
 		if c.valid() {
 			hits[q] = c
 		}

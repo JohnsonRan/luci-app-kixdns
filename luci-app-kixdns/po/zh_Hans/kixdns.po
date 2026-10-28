@@ -362,6 +362,15 @@ msgstr "可选。自定义兼容 Jev 的终结点，API 密钥会发送至该终
 msgid "Expecting an http:// or https:// URL"
 msgstr "请输入以 http:// 或 https:// 开头的 URL"
 
+msgid "Model name"
+msgstr "模型名称"
+
+msgid "Optional. Model requested from the custom endpoint. Leave empty to use jev-latest."
+msgstr "可选。向自定义终结点请求的模型。留空则使用 jev-latest。"
+
+msgid "Expecting up to 256 printable ASCII characters without spaces"
+msgstr "请输入不超过 256 个可打印 ASCII 字符，不含空格"
+
 msgid "Client"
 msgstr "客户端"
 

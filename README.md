@@ -32,7 +32,8 @@ Open **Services → KixDNS** in LuCI. For other targets, see [Build from source]
   The separate **24h logged responses** reference is unaffected by filters;
   retained-detail coverage is shown before filters, and missing hours are marked.
 - Optional TypeSafe Jev classification. Add an API key in LuCI to enable it;
-  an optional custom Jev-compatible endpoint receives requests and the key instead.
+  an optional custom Jev-compatible endpoint (and model name) receives requests
+  and the key instead.
   Eligible queried domains are sent to TypeSafe; leave key blank for no requests.
   Local names such as `router`, `.lan`, `.local` and `.arpa` are excluded, but
   exclusion is not a guarantee that every other name is public. Categories are
